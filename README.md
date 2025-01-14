@@ -1,9 +1,15 @@
-🚀 The Code-Driven Homelab: From Chaos to Kubernetes Harmony
+# 🚀 The Code-Driven Homelab: From Chaos to Kubernetes Harmony
 
-Welcome to the Code-Driven Homelab repository! 🎉 This project represents my journey from a chaotic tangle of virtual machines to a scalable, reproducible, and enterprise-grade Kubernetes-powered environment.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![GitHub Issues](https://img.shields.io/github/issues/your-username/your-repo)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/your-username/your-repo)
+![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/your-repo/ci.yml?branch=main)
 
-🗺️ Project Structure
+Welcome to the **Code-Driven Homelab** repository! 🎉 This project represents my journey from a chaotic tangle of virtual machines to a scalable, reproducible, and enterprise-grade Kubernetes-powered environment.
 
+## 🗺️ Project Structure
+
+```plaintext
 .
 ├── README.md
 ├── ansible
@@ -29,6 +35,7 @@ Welcome to the Code-Driven Homelab repository! 🎉 This project represents my j
 │   │   └── variables.tf
 │   └── prod-cluster
 └── terraform.tfstate
+
 
 Structure Breakdown
 	•	ansible/: Modular playbooks for automating VM configuration and Kubernetes setup.
