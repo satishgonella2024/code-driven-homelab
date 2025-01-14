@@ -1,0 +1,68 @@
+- name: Install MetalLB using Helm
+  hosts: master
+  become: true
+  tasks:
+    - name: Ensure curl is installed
+      package:
+        name: curl
+        state: present
+
+    - name: Download Helm binary
+      get_url:
+        url: https://get.helm.sh/helm-v3.13.0-linux-amd64.tar.gz
+        dest: /tmp/helm.tar.gz
+
+    - name: Extract Helm binary
+      unarchive:
+        src: /tmp/helm.tar.gz
+        dest: /usr/local/bin/
+        remote_src: yes
+
+    - name: Verify Helm installation
+      command: helm version
+
+    - name: Add Helm repository for MetalLB
+      shell: helm repo add metallb https://metallb.github.io/metallb
+
+    - name: Update Helm repositories
+      shell: helm repo update
+
+    - name: Copy MetalLB values file to the target node
+      copy:
+        src: ../files/metallb-values.yaml
+        dest: /tmp/metallb-values.yaml
+
+    - name: Ensure kubeconfig is available for Helm
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /root/.kube/config
+        remote_src: true
+
+    - name: Create MetalLB memberlist secret
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        kubectl create secret generic metallb-memberlist \
+        --from-literal=secretkey="$(openssl rand -base64 128)" \
+        -n metallb-system
+      args:
+        executable: /bin/bash
+      register: secret_creation
+      failed_when: "'already exists' not in secret_creation.stderr and secret_creation.rc != 0"
+
+    - name: Install MetalLB using Helm
+      shell: |
+        export KUBECONFIG=/root/.kube/config
+        helm upgrade --install metallb metallb/metallb \
+        --namespace metallb-system --create-namespace \
+        --values /tmp/metallb-values.yaml
+      args:
+        executable: /bin/bash
+
+    - name: Verify MetalLB deployment
+      shell: kubectl get pods -n metallb-system
+      register: pod_status
+
+    - name: Check for running pods
+      debug:
+        msg: "{{ pod_status.stdout }}"
+      failed_when: "'Running' not in pod_status.stdout"

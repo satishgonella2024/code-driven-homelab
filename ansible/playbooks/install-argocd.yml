@@ -1,0 +1,46 @@
+- name: Install ArgoCD with Helm
+  hosts: k8s-master
+  become: yes
+  tasks:
+    - name: Add Argo Helm repository
+      community.general.helm_repository:
+        name: argo
+        repo_url: https://argoproj.github.io/argo-helm
+
+    - name: Create ArgoCD namespace
+      kubernetes.core.k8s:
+        state: present
+        kind: Namespace
+        name: argocd
+        kubeconfig: /home/ubuntu/.kube/config
+
+    - name: Install ArgoCD using Helm
+      community.kubernetes.helm:
+        name: argocd
+        chart_ref: argo/argo-cd
+        release_namespace: argocd
+        kubeconfig: /home/ubuntu/.kube/config
+        values_file: "{{ playbook_dir }}/../../helm/argocd-values.yaml"
+
+    - name: Wait for ArgoCD pods to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: argocd
+        kubeconfig: /home/ubuntu/.kube/config
+      register: pods
+      until: >-
+        pods.resources | selectattr('status.phase', 'equalto', 'Running') |
+        length == 5
+      retries: 10
+      delay: 30
+
+    - name: Expose ArgoCD server as LoadBalancer
+      kubernetes.core.k8s:
+        state: present
+        kind: Service
+        namespace: argocd
+        name: argocd-server
+        definition:
+          spec:
+            type: LoadBalancer
+      kubeconfig: /home/ubuntu/.kube/config
