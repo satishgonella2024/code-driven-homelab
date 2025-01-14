@@ -1,0 +1,137 @@
+- become: true
+  hosts: master
+  name: Configure Kubernetes Master Node
+  tasks:
+    - ignore_errors: true
+      name: Reset existing Kubernetes cluster
+      shell: kubeadm reset --force
+
+    - name: Allow Kubernetes API server port
+      ufw:
+        port: '10250'
+        proto: tcp
+        rule: allow
+
+    - file:
+        path: '{{ item }}'
+        state: absent
+      loop:
+        - /etc/kubernetes/manifests
+        - /var/lib/etcd
+        - /etc/kubernetes/admin.conf
+        - /home/ubuntu/.kube/config
+      name: Remove existing Kubernetes directories
+
+    - ignore_errors: true
+      name: Stop and disable kubelet
+      systemd:
+        enabled: false
+        name: kubelet
+        state: stopped
+
+    - ignore_errors: true
+      name: Kill any remaining Kubernetes processes
+      shell: |
+        pkill -9 kube-apiserver || true
+        pkill -9 kube-controller-manager || true
+        pkill -9 kube-scheduler || true
+        pkill -9 etcd || true
+
+    - name: Initialize Kubernetes master using kubeadm
+      register: kubeadm_output
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+
+    - name: Wait for admin.conf to be created
+      wait_for:
+        path: /etc/kubernetes/admin.conf
+        state: present
+        timeout: 60
+
+    - file:
+        group: ubuntu
+        mode: '0755'
+        owner: ubuntu
+        path: /home/ubuntu/.kube
+        state: directory
+      name: Create .kube directory on master
+
+    - name: Copy admin.conf to master's kube config
+      shell: |
+        cp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+        chown ubuntu:ubuntu /home/ubuntu/.kube/config
+
+    - delay: 10
+      name: Wait for Kubernetes API server to be ready
+      register: api_ready
+      retries: 10
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config && kubectl get --raw='/readyz'
+      until: api_ready.rc == 0
+
+    - name: Install Flannel CNI plugin
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config && kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+    - delay: 10
+      name: Wait for cluster to be ready
+      register: kubectl_get_nodes
+      retries: 10
+      shell: |
+        export KUBECONFIG=/home/ubuntu/.kube/config && kubectl get nodes
+      until: kubectl_get_nodes.rc == 0
+
+    - name: Get kubeadm join command
+      register: join_command
+      shell: kubeadm token create --print-join-command
+
+    - copy:
+        content: '{{ join_command.stdout }}'
+        dest: /tmp/join-command
+        mode: '0755'
+      name: Save the join command to a file
+
+    - fetch:
+        dest: /tmp/join-command
+        flat: true
+        src: /tmp/join-command
+      name: Fetch the join-command file from the master node
+
+    - fetch:
+        dest: /tmp/admin.conf
+        flat: true
+        src: /etc/kubernetes/admin.conf
+      name: Fetch admin.conf from master
+
+    - copy:
+        dest: /tmp/join-command
+        mode: '0755'
+        src: /tmp/join-command
+      delegate_to: '{{ item }}'
+      name: Copy join-command file to worker nodes
+      with_items: '{{ groups["worker"] }}'
+
+    - delegate_to: '{{ item }}'
+      file:
+        group: ubuntu
+        mode: '0755'
+        owner: ubuntu
+        path: /home/ubuntu/.kube
+        state: directory
+      name: Create .kube directory on worker nodes
+      with_items: '{{ groups["worker"] }}'
+
+    - copy:
+        dest: /home/ubuntu/.kube/config
+        group: ubuntu
+        mode: '0600'
+        owner: ubuntu
+        src: /tmp/admin.conf
+      delegate_to: '{{ item }}'
+      name: Copy admin.conf to worker nodes
+      with_items: '{{ groups["worker"] }}'
+
+    - name: Re-enable kubelet on master
+      systemd:
+        enabled: true
+        name: kubelet
+        state: started

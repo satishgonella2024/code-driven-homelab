@@ -1,0 +1,43 @@
+
+---
+# tasks file for Kubernetes worker nodes
+- name: Configure Kubernetes Worker Node
+  hosts: worker
+  become: yes
+  tasks:
+    - block:
+        - name: Reset Kubernetes on worker nodes
+          shell: kubeadm reset --force
+          ignore_errors: yes
+
+        - name: Remove Kubernetes configuration directories
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/kubernetes/manifests
+            - /var/lib/etcd
+            - /etc/kubernetes/admin.conf
+            - /home/ubuntu/.kube/config
+            - /etc/kubernetes/pki
+
+        - name: Stop and disable kubelet
+          systemd:
+            name: kubelet
+            state: stopped
+            enabled: no
+          ignore_errors: yes
+
+        - name: Kill Kubernetes-related processes
+          shell: |
+            pkill -9 kubelet || true
+            pkill -9 containerd || true
+          ignore_errors: yes
+      name: Pre-join cleanup
+
+    - name: Join the Kubernetes cluster
+      shell: "sh /tmp/join-command --ignore-preflight-errors=all"
+      register: join_output
+      retries: 5
+      delay: 10
+      ignore_errors: yes

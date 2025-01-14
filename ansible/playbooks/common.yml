@@ -1,0 +1,159 @@
+- become: true
+  hosts: all
+  name: Install required packages
+  tasks:
+  - apt:
+      name:
+      - curl
+      - gnupg2
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - docker.io
+      - qemu-guest-agent
+      state: present
+      update_cache: true
+    name: Install required packages
+  - name: Enable and start QEMU Guest Agent
+    service:
+      enabled: true
+      name: qemu-guest-agent
+      state: started
+  - block:
+    - file:
+        path: /etc/apt/keyrings
+        state: absent
+      name: Remove Keyrings Directory
+    - file:
+        path: /etc/apt/sources.list.d/pkgs_k8s_io_core_stable_v1_30_deb.list
+        state: absent
+      name: Remove Existing Kubernetes Repository File
+    name: Pre-setup cleanup
+  - block:
+    - command: swapoff -a
+      name: Disable swap now
+    - name: Comment out swap in fstab
+      replace:
+        path: /etc/fstab
+        regexp: ^([^#].*\sswap\s.*)
+        replace: '#\1'
+    name: Disable swap
+  - block:
+    - copy:
+        content: 'overlay
+
+          br_netfilter
+
+          '
+        dest: /etc/modules-load.d/containerd.conf
+      name: Add kernel modules for Containerd
+    - name: Load kernel modules
+      shell: modprobe overlay && modprobe br_netfilter
+    - copy:
+        content: 'net.bridge.bridge-nf-call-ip6tables = 1
+
+          net.bridge.bridge-nf-call-iptables = 1
+
+          net.ipv4.ip_forward = 1
+
+          '
+        dest: /etc/sysctl.d/kubernetes.conf
+      name: Add kernel parameters for Kubernetes
+    - command: sysctl --system
+      name: Apply sysctl parameters
+    name: Configure kernel modules and parameters
+  - block:
+    - file:
+        path: /opt/containerd
+        state: directory
+      name: Create containerd config directory
+    - name: Generate default containerd config
+      shell: containerd config default > /opt/containerd/config.toml
+    - name: Enable SystemdCgroup
+      replace:
+        path: /opt/containerd/config.toml
+        regexp: SystemdCgroup = false
+        replace: SystemdCgroup = true
+    - name: Restart containerd
+      service:
+        daemon_reload: true
+        name: containerd
+        state: restarted
+    name: Configure Containerd
+  - block:
+    - loop:
+      - '6443'
+      - '22'
+      name: Allow Kubernetes ports
+      ufw:
+        port: '{{ item }}'
+        proto: tcp
+        rule: allow
+    - name: Enable UFW
+      ufw:
+        state: enabled
+    - command: ufw reload
+      name: Reload UFW
+    name: Configure firewall
+  - block:
+    - file:
+        mode: '0755'
+        path: /etc/apt/keyrings
+        state: directory
+      name: Create keyrings directory
+    - name: Download Kubernetes GPG key
+      shell: curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key |
+        gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    - apt_repository:
+        repo: deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/
+          /
+        state: present
+      name: Add Kubernetes repository
+    - apt:
+        name:
+        - kubelet
+        - kubeadm
+        - kubectl
+        state: present
+        update_cache: true
+      name: Install Kubernetes packages
+    - dpkg_selections:
+        name: '{{ item }}'
+        selection: hold
+      loop:
+      - kubelet
+      - kubeadm
+      - kubectl
+      name: Hold Kubernetes packages
+    name: Install Kubernetes components
+  - copy:
+      content: KUBELET_EXTRA_ARGS="--cgroup-driver=cgroupfs"
+      dest: /etc/default/kubelet
+    name: Configure kubelet
+  - name: Restart kubelet
+    service:
+      daemon_reload: true
+      name: kubelet
+      state: restarted
+  - file:
+      group: ubuntu
+      mode: '0755'
+      owner: ubuntu
+      path: /home/ubuntu/.kube
+      state: directory
+    name: Create .kube directory
+  - loop:
+    - '6443'
+    - 2379:2380
+    - 10250:10255
+    - 30000:32767
+    name: Allow required Kubernetes ports
+    ufw:
+      port: '{{ item }}'
+      proto: tcp
+      rule: allow
+  - name: Restart containerd
+    systemd:
+      enabled: true
+      name: containerd
+      state: restarted
