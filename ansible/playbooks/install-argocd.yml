@@ -1,11 +1,57 @@
 - name: Install ArgoCD with Helm
-  hosts: k8s-master
+  hosts: master
   become: yes
   tasks:
+    - name: Ensure Helm is installed
+      command: "helm version"
+      failed_when: false
+      register: helm_version
+
+    - name: Install Helm if not present
+      shell: |
+        curl -fsSL -o /usr/local/bin/helm https://get.helm.sh/helm-v3.13.0-linux-amd64.tar.gz
+        tar -zxvf /tmp/helm.tar.gz -C /usr/local/bin/
+        chmod +x /usr/local/bin/helm
+      when: helm_version.rc != 0
+
     - name: Add Argo Helm repository
-      community.general.helm_repository:
+      kubernetes.core.helm_repository:
         name: argo
         repo_url: https://argoproj.github.io/argo-helm
+    
+    - name: Ensure python3 venv is installed
+      apt:
+        name: python3-venv
+        state: present
+
+    - name: Create a virtual environment for ansible
+      command: python3 -m venv /home/ubuntu/.ansible_venv
+      register: venv_status # To check to see if a change has happened.
+      args:
+        creates: /home/ubuntu/.ansible_venv
+
+    - name: Install kubernetes python library
+      pip:
+        name: kubernetes
+        virtualenv: /home/ubuntu/.ansible_venv
+      when: venv_status.changed == true
+      become: true
+
+    - name: Install kubernetes python library
+      pip:
+        name: kubernetes
+        virtualenv: /home/ubuntu/.ansible_venv
+      when: venv_status.changed == false
+      become: true
+    
+    - name: Set the ansible python interpreter variable
+      set_fact:
+        ansible_python_interpreter: "/home/ubuntu/.ansible_venv/bin/python"
+    
+    - name: Copy argocd values file to the target
+      copy:
+        src: "{{ playbook_dir }}/../files/helm/argocd-values.yaml"
+        dest: "/tmp/argocd-values.yaml" # Temporary location for the target node.
 
     - name: Create ArgoCD namespace
       kubernetes.core.k8s:
@@ -13,14 +59,15 @@
         kind: Namespace
         name: argocd
         kubeconfig: /home/ubuntu/.kube/config
-
+    
     - name: Install ArgoCD using Helm
-      community.kubernetes.helm:
+      kubernetes.core.helm:
         name: argocd
         chart_ref: argo/argo-cd
         release_namespace: argocd
         kubeconfig: /home/ubuntu/.kube/config
-        values_file: "{{ playbook_dir }}/../../helm/argocd-values.yaml"
+        values_files:
+          - "/tmp/argocd-values.yaml"
 
     - name: Wait for ArgoCD pods to be ready
       kubernetes.core.k8s_info:
@@ -40,7 +87,10 @@
         kind: Service
         namespace: argocd
         name: argocd-server
+        kubeconfig: /home/ubuntu/.kube/config
         definition:
           spec:
             type: LoadBalancer
-      kubeconfig: /home/ubuntu/.kube/config
+            ports:
+              - port: 80
+                targetPort: 8080

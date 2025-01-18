@@ -1,0 +1,13 @@
+global:
+  installCRDs: true
+
+server:
+  service:
+    type: LoadBalancer
+
+redis:
+  enabled: true
+
+configs:
+  params:
+    server.insecure: true  # Allow operation without TLS
