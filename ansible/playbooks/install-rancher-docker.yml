@@ -1,0 +1,104 @@
+---
+- name: Install Docker, Docker Compose, and Rancher
+  hosts: rancher
+  become: true
+  vars:
+    docker_compose_version: "v2.24.5"
+    rancher_image: "rancher/rancher:latest"
+    rancher_ports:
+      - "80:80"
+      - "443:443"
+
+  tasks:
+    # Install Docker
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-docker
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add current user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    # Install Docker Compose
+    - name: Create Docker Compose directory
+      file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: "/usr/local/lib/docker/cli-plugins/docker-compose"
+        mode: '0755'
+
+    - name: Create symbolic link for Docker Compose
+      file:
+        src: "/usr/local/lib/docker/cli-plugins/docker-compose"
+        dest: "/usr/local/bin/docker-compose"
+        state: link
+
+    - name: Verify Docker Compose installation
+      command: docker compose version
+      register: docker_compose_version_output
+      changed_when: false
+
+    # Install Rancher
+    - name: Pull Rancher Docker image
+      docker_image:
+        name: "{{ rancher_image }}"
+        source: pull
+
+    - name: Run Rancher container
+      docker_container:
+        name: rancher
+        image: "{{ rancher_image }}"
+        state: started
+        ports: "{{ rancher_ports }}"
+        restart_policy: unless-stopped
+        privileged: true
+
+    # Optional: Wait for Rancher UI to become accessible
+    - name: Wait for Rancher UI to become accessible
+      uri:
+        url: "https://{{ ansible_host }}/ping"
+        validate_certs: no
+        status_code: 200
+      retries: 30
+      delay: 60
+      register: rancher_ui_check
+      until: rancher_ui_check.status == 200

@@ -1,0 +1,20 @@
+# ArgoCD Values File
+server:
+  extraArgs:
+    - --insecure
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 8080
+
+controller:
+  replicaCount: 1
+
+dex:
+  enabled: false
+
+redis:
+  enabled: false
+
+repoServer:
+  replicaCount: 1
