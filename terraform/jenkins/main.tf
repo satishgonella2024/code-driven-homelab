@@ -14,6 +14,17 @@ provider "proxmox" {
   pm_tls_insecure = true
 }
 
+terraform { 
+  cloud { 
+    
+    organization = "homelab-satish" 
+
+    workspaces { 
+      name = "jenkins" 
+    } 
+  } 
+}
+
 resource "proxmox_vm_qemu" "jenkins_server" {
     name = "jenkins-server"
     desc = "Jenkins management server"

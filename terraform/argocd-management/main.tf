@@ -14,6 +14,17 @@ provider "proxmox" {
   pm_tls_insecure = true
 }
 
+terraform { 
+  cloud { 
+    
+    organization = "homelab-satish" 
+
+    workspaces { 
+      name = "argocd-management" 
+    } 
+  } 
+}
+
 resource "proxmox_vm_qemu" "argocd_server" {
     name = "argocd-server"
     desc = "ArgoCD management server"
