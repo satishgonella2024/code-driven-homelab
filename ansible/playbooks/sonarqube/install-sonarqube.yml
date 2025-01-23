@@ -1,0 +1,213 @@
+# ansible/playbooks/sonarqube/install-sonarqube.yml
+---
+- name: Install and Configure SonarQube
+  hosts: sonarqube
+  become: true
+  vars:
+    sonarqube_version: "9.9.0.65466"
+    sonarqube_db_name: sonarqube
+    sonarqube_db_user: sonarqube
+    sonarqube_db_password: "{{ vault_sonarqube_db_password }}"
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - openjdk-17-jdk
+          - unzip
+          - postgresql
+          - postgresql-contrib
+        state: present
+        update_cache: yes
+
+    - name: Install psycopg2 for python 3.12
+      apt:
+        name:
+          - python3-psycopg2
+        state: present
+        update_cache: yes
+
+    - name: Configure system limits for SonarQube
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      with_items:
+        - { name: 'vm.max_map_count', value: '262144' }
+        - { name: 'fs.file-max', value: '131072' }
+
+    - name: Ensure sysctl settings persist across reboots
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "{{ item.name }} = {{ item.value }}"
+        regexp: "^{{ item.name }}"
+        state: present
+      with_items:
+        - { name: 'vm.max_map_count', value: '262144' }
+        - { name: 'fs.file-max', value: '131072' }
+
+    - name: Set up security limits for sonarqube
+      ansible.builtin.lineinfile:
+        path: /etc/security/limits.conf
+        line: "{{ item }}"
+        insertbefore: EOF
+      with_items:
+        - "sonarqube   -   nofile   131072"
+        - "sonarqube   -   nproc    8192"
+
+    - name: Create SonarQube group
+      group:
+        name: sonarqube
+        state: present
+
+    - name: Create SonarQube user
+      user:
+        name: sonarqube
+        group: sonarqube
+        home: /opt/sonarqube
+        system: yes
+        state: present
+
+    - name: Download SonarQube
+      get_url:
+        url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-{{ sonarqube_version }}.zip"
+        dest: /tmp/sonarqube.zip
+        mode: '0644'
+      register: download_status
+      until: download_status is success
+      retries: 3
+      delay: 5
+
+    - name: Remove existing /opt/sonarqube if exists
+      file:
+        path: /opt/sonarqube
+        state: absent
+
+    - name: Extract SonarQube
+      unarchive:
+        src: /tmp/sonarqube.zip
+        dest: /opt
+        remote_src: yes
+        owner: sonarqube
+        group: sonarqube
+        mode: '0755'
+
+    - name: Create symbolic link
+      file:
+        src: "/opt/sonarqube-{{ sonarqube_version }}"
+        dest: /opt/sonarqube
+        state: link
+        owner: sonarqube
+        group: sonarqube
+
+    - name: Ensure PostgreSQL is installed and running
+      systemd:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: Configure PostgreSQL for SonarQube
+      become_user: postgres
+      postgresql_db:
+        name: "{{ sonarqube_db_name }}"
+        encoding: UTF-8
+        template: template0
+        state: present
+
+    - name: Create PostgreSQL user
+      become_user: postgres
+      postgresql_user:
+        db: "{{ sonarqube_db_name }}"
+        name: "{{ sonarqube_db_user }}"
+        password: "{{ sonarqube_db_password }}"
+        priv: ALL
+        state: present
+
+    - name: Grant PostgreSQL user access to public schema
+      become: true
+      become_user: postgres
+      postgresql_query:
+        db: "{{ sonarqube_db_name }}"
+        query: |
+          ALTER SCHEMA public OWNER TO {{ sonarqube_db_user }};
+          GRANT ALL ON SCHEMA public TO {{ sonarqube_db_user }};
+          GRANT ALL PRIVILEGES ON DATABASE {{ sonarqube_db_name }} TO {{ sonarqube_db_user }};
+          GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {{ sonarqube_db_user }};
+          GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {{ sonarqube_db_user }};
+
+    - name: Reset PostgreSQL permissions
+      become: true
+      become_user: postgres
+      postgresql_query:
+        db: "{{ sonarqube_db_name }}"
+        query: |
+          REVOKE ALL ON ALL TABLES IN SCHEMA public FROM public;
+          REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM public;
+          REVOKE ALL ON SCHEMA public FROM public;
+          GRANT ALL ON SCHEMA public TO {{ sonarqube_db_user }};
+
+    - name: Ensure required directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: sonarqube
+        group: sonarqube
+        mode: '0750'
+      with_items:
+        - /opt/sonarqube/data
+        - /opt/sonarqube/temp
+        - /opt/sonarqube/logs
+        - /opt/sonarqube/extensions
+
+    - name: Clear temporary directory
+      file:
+        path: /opt/sonarqube/temp
+        state: directory
+        owner: sonarqube
+        group: sonarqube
+        mode: '0750'
+        
+    - name: Ensure logs directory is writable
+      file:
+        path: /opt/sonarqube/logs
+        state: directory
+        owner: sonarqube
+        group: sonarqube
+        mode: '0755'
+        recurse: yes
+
+    - name: Configure SonarQube properties
+      template:
+        src: sonar.properties.j2
+        dest: /opt/sonarqube/conf/sonar.properties
+        owner: sonarqube
+        group: sonarqube
+        mode: '0644'
+
+    - name: Create systemd service
+      template:
+        src: sonarqube.service.j2
+        dest: /etc/systemd/system/sonarqube.service
+        mode: '0644'
+
+    - name: Ensure sonar.sh is executable
+      file:
+        path: /opt/sonarqube/bin/linux-x86-64/sonar.sh
+        mode: '0755'
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start and enable SonarQube service
+      systemd:
+        name: sonarqube
+        state: restarted
+        enabled: yes
+
+    - name: Wait for SonarQube to be ready
+      wait_for:
+        port: 9000
+        delay: 30
+        timeout: 300

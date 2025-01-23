@@ -1,0 +1,21 @@
+# ansible/playbooks/sonarqube/templates/sonarqube.service.j2
+[Unit]
+Description=SonarQube service
+After=syslog.target network.target postgresql.service
+
+[Service]
+Type=simple
+Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh console
+User=sonarqube
+Group=sonarqube
+LimitNOFILE=131072
+LimitNPROC=8192
+TimeoutStartSec=600
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/sonarqube/logs/sonar-service.log
+StandardError=append:/opt/sonarqube/logs/sonar-service.log
+
+[Install]
+WantedBy=multi-user.target
