@@ -1,0 +1,208 @@
+---
+- name: Install and Configure Jenkins with Docker-based Agents
+  hosts: jenkins-node-1
+  become: true
+  vars:
+    jenkins_home: /var/lib/jenkins
+    jenkins_url: http://192.168.5.211:8080
+    jenkins_admin_username: admin
+    jenkins_admin_password: "admin123"
+    jenkins_plugins:
+      - git
+      - workflow-aggregator
+      - pipeline-stage-view
+      - blueocean
+      - docker-workflow
+      - credentials
+      - ssh
+      - matrix-auth
+      - cloudbees-folder
+      - credentials-binding
+      - timestamper
+      - github
+      - docker-plugin
+    docker_group: docker
+    docker_agent_image: "jenkins/inbound-agent:latest"
+    docker_agent_name: "docker-agent"
+    docker_agent_label: "docker-node"
+    jenkins_cli_jar: /tmp/jenkins-cli.jar
+
+  tasks:
+    - name: Install Java and required packages
+      apt:
+        name: 
+          - openjdk-17-jdk
+          - fontconfig
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: yes
+
+    - name: Add Jenkins repository key
+      apt_key:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        state: present
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: deb https://pkg.jenkins.io/debian-stable binary/
+        state: present
+        filename: jenkins
+
+    - name: Install Docker and dependencies
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+        state: present
+        update_cache: yes
+
+    - name: Add Jenkins user to the Docker group
+      user:
+        name: jenkins
+        groups: "{{ docker_group }}"
+        append: yes
+
+    - name: Enable and start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    - name: Ensure Jenkins is started
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Wait for Jenkins to start up
+      wait_for:
+        path: "{{ jenkins_home }}/secrets/initialAdminPassword"
+        delay: 30
+        timeout: 300
+
+    - name: Get Jenkins initial admin password
+      slurp:
+        src: "{{ jenkins_home }}/secrets/initialAdminPassword"
+      register: jenkins_initial_password
+
+    - name: Create Jenkins basic security init script
+      copy:
+        dest: "{{ jenkins_home }}/init.groovy.d/basic-security.groovy"
+        mode: '0644'
+        content: |
+          #!groovy
+          import jenkins.model.*
+          import hudson.security.*
+          import jenkins.security.s2m.AdminWhitelistRule
+
+          def instance = Jenkins.getInstance()
+
+          def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+          hudsonRealm.createAccount("{{ jenkins_admin_username }}", "{{ jenkins_admin_password }}")
+          instance.setSecurityRealm(hudsonRealm)
+
+          def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+          strategy.setAllowAnonymousRead(false)
+          instance.setAuthorizationStrategy(strategy)
+
+          instance.save()
+
+          Jenkins.instance.getInjector().getInstance(AdminWhitelistRule.class).setMasterKillSwitch(false)
+    
+    - name: Copy Docker cloud Groovy script
+      copy:
+        dest: "{{ jenkins_home }}/init.groovy.d/docker-cloud.groovy"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+        content: |
+          #!groovy
+          import jenkins.model.*
+          import hudson.slaves.*
+          import com.nirima.jenkins.plugins.docker.*
+          import com.nirima.jenkins.plugins.docker.launcher.*
+          import com.nirima.jenkins.plugins.docker.strategy.*
+          
+          def instance = Jenkins.getInstance()
+          
+          def dockerTemplateBase = new DockerTemplateBase("{{ docker_agent_image }}")
+          
+          def dockerTemplate = new DockerTemplate(
+              dockerTemplateBase,
+              new DockerComputerSSHLauncher("ssh://docker-agent", "22", "jenkins", "", "", ""),
+              new DockerRetentionStrategy("10"),
+              "{{ docker_agent_label }}",
+              "1"
+          )
+          
+          def dockerCloud = new DockerCloud("docker-cloud", [dockerTemplate], "unix:///var/run/docker.sock")
+          
+          instance.clouds.add(dockerCloud)
+          instance.save()
+
+          println "Docker cloud configuration applied!"
+
+    - name: Restart Jenkins to apply security configuration and Docker cloud configuration
+      systemd:
+        name: jenkins
+        state: restarted
+
+    - name: Wait for Jenkins to be available
+      wait_for:
+        host: "192.168.5.211"
+        port: 8080
+        delay: 60
+        timeout: 300
+
+    - name: Download Jenkins CLI
+      get_url:
+        url: "{{ jenkins_url }}/jnlpJars/jenkins-cli.jar"
+        dest: "{{ jenkins_cli_jar }}"
+        mode: '0440'
+        force: yes
+      retries: 10
+      delay: 10
+      register: jenkins_cli_download
+      until: jenkins_cli_download is success
+
+    - name: Install Jenkins plugins
+      shell: >
+        java -jar {{ jenkins_cli_jar }} -s {{ jenkins_url }} 
+        -auth {{ jenkins_admin_username }}:{{ jenkins_admin_password }}
+        install-plugin {{ item }} -deploy
+      with_items: "{{ jenkins_plugins }}"
+      register: plugin_installation
+      retries: 3
+      delay: 10
+      until: plugin_installation is success
+    
+    - name: Restart Jenkins to apply plugin installation
+      systemd:
+        name: jenkins
+        state: restarted
+    
+    - name: Wait for Jenkins to be available after plugin install restart
+      wait_for:
+        host: "192.168.5.211"
+        port: 8080
+        delay: 60
+        timeout: 300
+    
+    - name: Restart Docker service to apply group changes
+      systemd:
+        name: docker
+        state: restarted
+
+  handlers:
+    - name: restart jenkins
+      systemd:
+        name: jenkins
+        state: restarted

@@ -1,0 +1,47 @@
+# ansible/playbooks/jenkins/templates/jenkins.yaml.j2
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "{{ jenkins_admin_user }}"
+          password: "{{ jenkins_admin_password }}"
+  
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:{{ jenkins_admin_user }}"
+        - "Overall/Read:authenticated"
+  
+  numExecutors: 2
+  
+  clouds:
+    - docker:
+        name: "docker"
+        dockerApi:
+          dockerHost:
+            uri: "unix:///var/run/docker.sock"
+        templates:
+          - labelString: "docker-agent"
+            dockerTemplateBase:
+              image: "jenkins/agent:latest"
+            remoteFs: "/home/jenkins/agent"
+            connector:
+              attach:
+                user: "jenkins"
+            instanceCapStr: "10"
+
+  systemMessage: "Jenkins configured automatically by JCasc"
+  disableRememberMe: false
+  mode: NORMAL
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+
+security:
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+  scriptApproval:
+    approvedSignatures:
+      - "method hudson.model.Run delete"
+      - "method hudson.model.Job getLastBuild"
