@@ -1,4 +1,9 @@
-output "jenkins_server_ip" {
-  value = regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+", proxmox_vm_qemu.jenkins_server.ipconfig0)
-  description = "The IP address of the Rancher server"
+output "vm_ips" {
+  description = "IP addresses of the created VMs"
+  value       = [for vm in proxmox_vm_qemu.jenkins_server : vm.ipconfig0]
+}
+
+output "vm_names" {
+  description = "Names of the created VMs"
+  value       = [for vm in proxmox_vm_qemu.jenkins_server : vm.name]
 }

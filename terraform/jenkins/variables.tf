@@ -15,6 +15,17 @@ variable "proxmox_password" {
 variable "proxmox_node" {
    description = "Proxmox node name"
 }
+
+variable "vm_count" {
+  description = "Number of VMs to create"
+  default     = 1
+}
+
+variable "cluster_name" {
+  description = "Cluster name"
+  default     = "jenkins"
+}
+
 variable "cloud_init_template" {
    description = "Cloud-init template name"
     default     = "ubuntu-2404-cloud-template"
@@ -22,17 +33,17 @@ variable "cloud_init_template" {
 
 variable "vm_cores" {
   description = "Number of CPU cores for VMs"
-   default     = 2
+   default     = 4
 }
 
 variable "vm_memory" {
    description = "Memory size (in MB) for VMs"
-   default     = 2048
+   default     = 8192
 }
 
 variable "vm_disk_size" {
    description = "Disk size (in GB) for VMs"
-    default     = "20G"
+    default     = "200G"
  }
 
 variable "vm_storage" {
