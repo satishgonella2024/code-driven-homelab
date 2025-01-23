@@ -1,6 +1,0 @@
-# ansible/group_vars/jenkins/vars.yml
----
-jenkins_admin_user: "admin"
-jenkins_http_port: 8080
-jenkins_home: "/var/lib/jenkins"
-jenkins_admin_password: "{{ vault_jenkins_admin_password }}"
