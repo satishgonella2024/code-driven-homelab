@@ -1,0 +1,29 @@
+# ansible/playbooks/sonarqube/templates/sonar.properties.j2
+# Database Configuration
+sonar.jdbc.username={{ sonarqube_db_user }}
+sonar.jdbc.password={{ sonarqube_db_password }}
+sonar.jdbc.url=jdbc:postgresql://localhost:5432/{{ sonarqube_db_name }}
+
+# Web Server Configuration
+sonar.web.host=0.0.0.0
+sonar.web.port=9000
+sonar.web.javaOpts=-Xmx512m -Xms128m -XX:+HeapDumpOnOutOfMemoryError
+
+# Elasticsearch Configuration
+sonar.search.javaOpts=-Xmx512m -Xms512m -XX:MaxDirectMemorySize=256m -XX:+HeapDumpOnOutOfMemoryError
+
+# Compute Engine Configuration
+sonar.ce.javaOpts=-Xmx2048m -Xms512m -XX:+HeapDumpOnOutOfMemoryError
+
+# File System Configuration
+sonar.path.data=/opt/sonarqube/data
+sonar.path.temp=/opt/sonarqube/temp
+sonar.path.logs=/opt/sonarqube/logs
+
+# Log Configuration
+sonar.log.level=INFO
+sonar.log.rolling=true
+sonar.log.maxFiles=7
+
+# Authentication
+sonar.auth.jwtBase64Hs256Secret={{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') | b64encode }}
