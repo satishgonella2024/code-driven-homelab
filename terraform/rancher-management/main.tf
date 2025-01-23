@@ -14,6 +14,17 @@ provider "proxmox" {
   pm_tls_insecure = true
 }
 
+terraform { 
+  cloud { 
+    
+    organization = "homelab-satish" 
+
+    workspaces { 
+      name = "rancher-management" 
+    } 
+  } 
+}
+
 resource "proxmox_vm_qemu" "rancher_server" {
     name = "rancher-server"
     desc = "Rancher management server"

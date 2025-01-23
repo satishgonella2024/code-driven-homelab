@@ -14,6 +14,17 @@ provider "proxmox" {
   pm_tls_insecure = true
 }
 
+terraform { 
+  cloud { 
+    
+    organization = "homelab-satish" 
+
+    workspaces { 
+      name = "dev-cluster" 
+    } 
+  } 
+}
+
 resource "proxmox_vm_qemu" "kube_node" {
   count       = var.vm_count
   name        = "${var.cluster_name}-node-${count.index + 1}"

@@ -1,0 +1,40 @@
+---
+- name: Debug Jenkins Service
+  hosts: jenkins
+  become: true
+  tasks:
+    - name: Create debug directory
+      file:
+        path: /tmp/jenkins-debug
+        state: directory
+        mode: '0755'
+
+    - name: Collect system information
+      shell: |
+        echo "=== Jenkins Service Status ===" > /tmp/jenkins-debug/debug.log
+        systemctl status jenkins >> /tmp/jenkins-debug/debug.log 2>&1
+        
+        echo -e "\n=== Jenkins Service Logs ===" >> /tmp/jenkins-debug/debug.log
+        journalctl -xeu jenkins.service --no-pager >> /tmp/jenkins-debug/debug.log 2>&1
+        
+        echo -e "\n=== Jenkins Configuration ===" >> /tmp/jenkins-debug/debug.log
+        cat /var/lib/jenkins/jenkins.yaml >> /tmp/jenkins-debug/debug.log 2>&1
+        
+        echo -e "\n=== Jenkins Directory Permissions ===" >> /tmp/jenkins-debug/debug.log
+        ls -la /var/lib/jenkins/ >> /tmp/jenkins-debug/debug.log 2>&1
+        
+        echo -e "\n=== System Resources ===" >> /tmp/jenkins-debug/debug.log
+        free -m >> /tmp/jenkins-debug/debug.log 2>&1
+        df -h >> /tmp/jenkins-debug/debug.log 2>&1
+      ignore_errors: yes
+
+    - name: Fetch debug log
+      fetch:
+        src: /tmp/jenkins-debug/debug.log
+        dest: ./jenkins-debug-{{ inventory_hostname }}.log
+        flat: yes
+
+    - name: Clean up debug directory
+      file:
+        path: /tmp/jenkins-debug
+        state: absent

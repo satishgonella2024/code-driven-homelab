@@ -1,0 +1,88 @@
+---
+- name: Install common Jenkins plugins using Jenkins CLI
+  hosts: jenkins
+  become: true
+  tasks:
+    # Wait for Jenkins to be fully up and running
+    - name: Wait for Jenkins to start
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 8080
+        timeout: 300
+        state: started
+
+    # Fetch the Jenkins admin password
+    - name: Get Jenkins Admin Password
+      slurp:
+        src: /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_admin_password_file
+
+    - name: Set Jenkins Admin Password variable
+      set_fact:
+        jenkins_admin_password: "{{ jenkins_admin_password_file['content'] | b64decode | trim }}"
+
+    # Download Jenkins CLI
+    - name: Download Jenkins CLI jar
+      get_url:
+        url: "http://{{ ansible_host }}:8080/jnlpJars/jenkins-cli.jar"
+        dest: /tmp/jenkins-cli.jar
+        mode: '0644'
+
+    # Plugin installation in batches
+    - name: Install Jenkins plugins - Batch 1
+      shell:
+        cmd: "java -jar /tmp/jenkins-cli.jar -s http://{{ ansible_host }}:8080 -auth admin:{{ jenkins_admin_password }} install-plugin {{ item }}"
+      with_items:
+        - git
+        - github
+        - workflow-aggregator
+        - workflow-basic-steps
+        - workflow-cps
+        - workflow-durable-task-step
+        - workflow-job
+        - workflow-multibranch
+      register: batch_1_results
+      retries: 3
+      delay: 10
+      failed_when: "'Error' in batch_1_results.stdout or batch_1_results.rc != 0"
+
+    - name: Install Jenkins plugins - Batch 2
+      shell:
+        cmd: "java -jar /tmp/jenkins-cli.jar -s http://{{ ansible_host }}:8080 -auth admin:{{ jenkins_admin_password }} install-plugin {{ item }}"
+      with_items:
+        - blueocean
+        - docker-plugin
+        - kubernetes
+        - matrix-project
+        - email-ext
+        - slack
+        - ansicolor
+        - build-timeout
+      register: batch_2_results
+      retries: 3
+      delay: 10
+      failed_when: "'Error' in batch_2_results.stdout or batch_2_results.rc != 0"
+
+    - name: Install Jenkins plugins - Batch 3
+      shell:
+        cmd: "java -jar /tmp/jenkins-cli.jar -s http://{{ ansible_host }}:8080 -auth admin:{{ jenkins_admin_password }} install-plugin {{ item }}"
+      with_items:
+        - ws-cleanup
+        - credentials-binding
+        - ssh-agent
+        - timestamper
+        - junit
+        - sonar
+        - config-file-provider
+        - envinject
+      register: batch_3_results
+      retries: 3
+      delay: 10
+      failed_when: "'Error' in batch_3_results.stdout or batch_3_results.rc != 0"
+
+    # Restart Jenkins after plugin installation
+    - name: Restart Jenkins service
+      systemd:
+        name: jenkins
+        state: restarted
+        daemon_reload: yes

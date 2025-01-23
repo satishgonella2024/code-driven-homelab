@@ -20,14 +20,15 @@ terraform {
     organization = "homelab-satish" 
 
     workspaces { 
-      name = "argocd-management" 
+      name = "jenkins" 
     } 
   } 
 }
 
-resource "proxmox_vm_qemu" "argocd_server" {
-    name = "argocd-server"
-    desc = "ArgoCD management server"
+resource "proxmox_vm_qemu" "jenkins_server" {
+    count       = var.vm_count
+    name        = "${var.cluster_name}-node-${count.index + 1}"
+    desc = "Jenkins management server"
     target_node = var.proxmox_node
     clone       = var.cloud_init_template
 
@@ -69,7 +70,8 @@ resource "proxmox_vm_qemu" "argocd_server" {
     }
     # Cloud-Init Settings
    boot      = "order=scsi0"
-   ipconfig0 = "ip=192.168.5.210/22,gw=${var.vm_gateway}"
+  #  ipconfig0 = "ip=192.168.5.211/22,gw=${var.vm_gateway}"
+   ipconfig0 = "ip=192.168.5.${211 + count.index}/22,gw=${var.vm_gateway}"
 
     # User Configuration
     ciuser     = var.cloud_init_user

@@ -1,0 +1,331 @@
+---
+################################################################################
+# Ansible Playbook: Jenkins Installation with Docker Cloud
+# 
+# Description:
+#   This playbook automates the installation and configuration of Jenkins with
+#   Docker Cloud integration. It includes:
+#   - Java and Docker installation
+#   - Jenkins core installation and security setup
+#   - Plugin installation and configuration
+#   - Docker Cloud configuration for dynamic agent provisioning
+#
+# Requirements:
+#   - Ubuntu/Debian target system
+#   - Ansible 2.9+
+#   - Target system must have internet access
+#   - SSH access to target system
+#
+# Usage:
+#   ansible-playbook -i inventory/dev/inventory.ini playbooks/jenkins/install-jenkins.yml
+################################################################################
+
+- name: Install and Configure Jenkins with Docker Cloud
+  hosts: jenkins-node-1
+  become: true
+  
+  vars:
+    # Core configuration
+    jenkins_home: /var/lib/jenkins
+    jenkins_url: http://192.168.5.211:8080  # Change this to your Jenkins URL
+    jenkins_admin_username: admin
+    jenkins_admin_password: "admin123"  # Change this in production
+    
+    # Plugin list organized by category
+    jenkins_plugins:
+      # Essential Plugins for core functionality
+      - configuration-as-code  # Jenkins Configuration as Code
+      - git                   # Git integration
+      - github               # GitHub integration
+      - github-branch-source # GitHub Branch Source
+      - gitlab-plugin        # GitLab integration
+      - bitbucket           # Bitbucket integration
+      
+      # Pipeline and Workflow plugins
+      - workflow-aggregator          # Pipeline
+      - pipeline-stage-view         # Pipeline Stage View
+      - pipeline-utility-steps      # Pipeline Utility Steps
+      - pipeline-model-definition   # Declarative Pipeline
+      - pipeline-build-step        # Pipeline Build Step
+      - workflow-support           # Pipeline Support
+      - pipeline-input-step        # Pipeline Input Step
+      - pipeline-milestone-step    # Pipeline Milestone Step
+      - pipeline-graph-analysis    # Pipeline Graph Analysis
+      
+      # UI and Visualization plugins
+      - blueocean           # Modern and visual Pipeline UI
+      - dashboard-view      # Customizable dashboard
+      - simple-theme-plugin # UI customization
+      - extra-columns      # Additional columns in views
+      
+      # Build and Deploy plugins
+      - docker-workflow    # Docker Pipeline integration
+      - docker-plugin     # Docker agents
+      - docker-commons    # Docker common functions
+      - docker-slaves    # Docker-based agents
+      - kubernetes       # Kubernetes integration
+      - kubernetes-cli   # Kubernetes CLI integration
+      
+      # Security and Authorization plugins
+      - credentials         # Credentials management
+      - credentials-binding # Credentials Binding
+      - matrix-auth        # Matrix-based security
+      - role-strategy      # Role-based authorization
+      - active-directory   # Active Directory integration
+      - ldap              # LDAP integration
+      
+      # SCM and Code Quality plugins
+      - sonar          # SonarQube integration
+      - warnings-ng    # Warnings Next Generation
+      - jacoco        # JaCoCo code coverage
+      - cobertura    # Cobertura code coverage
+      
+      # Utility plugins
+      - timestamper         # Add timestamps to console output
+      - build-timeout       # Build timeout
+      - ws-cleanup         # Workspace cleanup
+      - jobConfigHistory   # Track job configuration changes
+      - mask-passwords     # Mask passwords in console
+      - config-file-provider # Managed config files
+      - ssh               # SSH integration
+      - cloudbees-folder  # Folders for jobs
+      - ansible          # Ansible integration
+      - terraform        # Terraform integration
+      
+      # Monitoring and Notification plugins
+      - email-ext    # Extended email notification
+      - slack       # Slack integration
+      - prometheus  # Prometheus metrics
+      - metrics     # Metrics
+      - monitoring  # System monitoring
+      
+      # Testing plugins
+      - junit                  # JUnit integration
+      - htmlpublisher         # HTML report publishing
+      - xunit                 # xUnit integration
+      - test-results-analyzer # Test result analysis
+
+  tasks:
+    # System Prerequisites
+    - name: Install Java and required packages
+      apt:
+        name: 
+          - openjdk-17-jdk    # Java 17 JDK
+          - fontconfig        # Required for Jenkins
+          - ca-certificates   # SSL certificates
+        state: present
+        update_cache: yes
+
+    - name: Set JAVA_HOME
+      lineinfile:
+        path: /etc/environment
+        line: 'JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"'
+        state: present
+
+    # Jenkins Repository Setup
+    - name: Remove existing Jenkins GPG key if present
+      file:
+        path: /usr/share/keyrings/jenkins-keyring.asc
+        state: absent
+
+    - name: Add Jenkins GPG key
+      shell: curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+      args:
+        creates: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/"
+        state: present
+        filename: jenkins
+        update_cache: yes
+
+    # Jenkins Installation
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    # Docker Installation and Setup
+    - name: Install Docker
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+        state: present
+        update_cache: yes
+
+    - name: Add jenkins user to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    # Jenkins Directory Setup
+    - name: Ensure Jenkins directory permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+      loop:
+        - "{{ jenkins_home }}"
+        - "{{ jenkins_home }}/init.groovy.d"
+
+    # Jenkins Security Configuration
+    - name: Create security groovy script
+      copy:
+        dest: "{{ jenkins_home }}/init.groovy.d/basic-security.groovy"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+        content: |
+          #!groovy
+          
+          // Import required Jenkins libraries
+          import jenkins.model.*
+          import hudson.security.*
+          import jenkins.security.s2m.AdminWhitelistRule
+          import jenkins.install.InstallState
+          
+          def instance = Jenkins.getInstance()
+          
+          // Configure Jenkins Security Realm
+          def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+          def user = hudsonRealm.createAccount("{{ jenkins_admin_username }}", "{{ jenkins_admin_password }}")
+          instance.setSecurityRealm(hudsonRealm)
+          
+          // Configure Authorization Strategy
+          def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+          strategy.setAllowAnonymousRead(false)
+          instance.setAuthorizationStrategy(strategy)
+          
+          // Skip Setup Wizard
+          instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
+          
+          // Save Configuration
+          instance.save()
+          
+          println "Jenkins security setup completed. User: {{ jenkins_admin_username }}, Password: {{ jenkins_admin_password }}"
+
+    # Jenkins Configuration as Code
+    - name: Create Jenkins Configuration as Code file
+      copy:
+        dest: "{{ jenkins_home }}/jenkins.yaml"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+        content: |
+          jenkins:
+            systemMessage: "Jenkins configured automatically by Configuration as Code plugin"
+            clouds:
+              - docker:
+                  name: "docker"
+                  dockerApi:
+                    connectTimeout: 60
+                    readTimeout: 60
+                    dockerHost:
+                      uri: "unix:///var/run/docker.sock"
+                  templates:
+                    - labelString: "docker-agent"
+                      mode: EXCLUSIVE
+                      name: "docker-agent"
+                      dockerTemplateBase:
+                        image: "jenkins/agent:latest"
+                        environment:
+                          - "JENKINS_AGENT_WORKDIR=/home/jenkins/agent"
+                      remoteFs: "/home/jenkins/agent"
+                      instanceCapStr: "10"
+                      retentionStrategy:
+                        idleMinutes: 1
+
+    # Jenkins Java Options Configuration
+    - name: Ensure JENKINS_JAVA_OPTIONS includes JCasC config path
+      lineinfile:
+        path: /etc/default/jenkins
+        regexp: '^JENKINS_JAVA_OPTIONS='
+        line: 'JENKINS_JAVA_OPTIONS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Dcasc.jenkins.config={{ jenkins_home }}/jenkins.yaml"'
+        create: yes
+
+    # Permissions Setup
+    - name: Ensure proper permissions on Jenkins directories
+      file:
+        path: "{{ jenkins_home }}"
+        owner: jenkins
+        group: jenkins
+        recurse: yes
+        state: directory
+
+    - name: Ensure proper permissions on Jenkins config file
+      file:
+        path: "/etc/default/jenkins"
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+        state: file
+
+    # Service Management
+    - name: Stop Jenkins service
+      systemd:
+        name: jenkins
+        state: stopped
+
+    - name: Start Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        daemon_reload: yes
+
+    # Wait for Jenkins to Start
+    - name: Wait for Jenkins to be available
+      wait_for:
+        host: "192.168.5.211"  # Change this to your Jenkins host
+        port: 8080
+        delay: 20
+        timeout: 180
+
+    # Plugin Installation
+    - name: Get Jenkins CLI jar
+      get_url:
+        url: "{{ jenkins_url }}/jnlpJars/jenkins-cli.jar"
+        dest: /tmp/jenkins-cli.jar
+        mode: '0440'
+
+    - name: Install Jenkins plugins via CLI
+      shell: >
+        java -jar /tmp/jenkins-cli.jar -s {{ jenkins_url }} -auth {{ jenkins_admin_username }}:{{ jenkins_admin_password }}
+        install-plugin {{ item }}
+      with_items: "{{ jenkins_plugins }}"
+      notify: restart jenkins
+
+    # Final Service Restart
+    - name: Final Jenkins restart
+      systemd:
+        name: jenkins
+        state: restarted
+        daemon_reload: yes
+
+    - name: Final wait for Jenkins to be available
+      wait_for:
+        host: "192.168.5.211"  # Change this to your Jenkins host
+        port: 8080
+        delay: 20
+        timeout: 180
+
+  # Handlers
+  handlers:
+    - name: restart jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+
+################################################################################
+# Post-Installation Notes:
+# 1. Access Jenkins at http://your-jenkins-host:8080
+# 2. Login with the configured admin credentials
+# 3. Jenkins will be ready to use with all plugins installed
+# 4. Docker Cloud will be configured and ready to spin up agents
+# 5. Change the admin password in production environments
+################################################################################
