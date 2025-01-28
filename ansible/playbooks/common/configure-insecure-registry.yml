@@ -1,0 +1,36 @@
+---
+- name: Configure insecure Docker registry on Kubernetes nodes
+  hosts: cluster
+  become: yes
+  tasks:
+    - name: Ensure Docker configuration directory exists
+      file:
+        path: /etc/docker
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: Add insecure registry to Docker daemon.json
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "insecure-registries": ["192.168.5.211:5000"]
+          }
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Restart Docker service to apply changes
+      service:
+        name: docker
+        state: restarted
+
+    - name: Verify Docker configuration
+      shell: docker info
+      register: docker_info_output
+
+    - name: Display Docker insecure registries
+      debug:
+        msg: "{{ docker_info_output.stdout_lines | select('match', 'Insecure Registries') | list }}"
