@@ -15,17 +15,27 @@
     - name: Extract Helm binary
       unarchive:
         src: /tmp/helm.tar.gz
-        dest: /usr/local/bin/
+        dest: /tmp/
         remote_src: yes
+
+    - name: Move Helm binary to /usr/local/bin
+      command: mv /tmp/linux-amd64/helm /usr/local/bin/helm
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Ensure Helm binary is executable
+      file:
+        path: /usr/local/bin/helm
+        mode: '0755'
 
     - name: Verify Helm installation
       command: helm version
 
     - name: Add Helm repository for MetalLB
-      shell: helm repo add metallb https://metallb.github.io/metallb
+      command: helm repo add metallb https://metallb.github.io/metallb
 
     - name: Update Helm repositories
-      shell: helm repo update
+      command: helm repo update
 
     - name: Copy MetalLB values file to the target node
       copy:

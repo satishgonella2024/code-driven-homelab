@@ -1,0 +1,50 @@
+---
+- name: Deploy MetalLB using Kubernetes Manifests
+  hosts: master
+  become: true
+  vars:
+    metallb_namespace: metallb-system
+    metallb_install_url: https://raw.githubusercontent.com/metallb/metallb/main/config/manifests/metallb-native.yaml
+    metallb_manifests_src: "{{ playbook_dir }}/../../../metallb-manifests/"
+    metallb_manifests_dest: /tmp/metallb/
+    kubeconfig_path: /home/ubuntu/.kube/config  # Path to kubeconfig on the master node
+  tasks:
+
+    # Step 1: Create the MetalLB namespace
+    - name: Create the MetalLB namespace
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl create namespace {{ metallb_namespace }}
+      args:
+        executable: /bin/bash
+      ignore_errors: true
+
+    # Step 2: Install MetalLB using the official manifest
+    - name: Install MetalLB using the official manifest
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl apply -f {{ metallb_install_url }}
+      args:
+        executable: /bin/bash
+
+    # Step 3: Copy MetalLB manifests to the target node
+    - name: Copy MetalLB manifests to the target node
+      copy:
+        src: "{{ metallb_manifests_src }}"
+        dest: "{{ metallb_manifests_dest }}"
+
+    # Step 4: Apply the IPAddressPool manifest
+    - name: Apply IPAddressPool manifest
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl apply -f {{ metallb_manifests_dest }}/IPAddressPool.yaml
+      args:
+        executable: /bin/bash
+
+    # Step 5: Apply the L2Advertisement manifest
+    - name: Apply L2Advertisement manifest
+      shell: |
+        export KUBECONFIG={{ kubeconfig_path }}
+        kubectl apply -f {{ metallb_manifests_dest }}/L2Advertisement.yaml
+      args:
+        executable: /bin/bash
