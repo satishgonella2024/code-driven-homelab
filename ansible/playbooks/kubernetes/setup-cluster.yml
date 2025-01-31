@@ -1,0 +1,27 @@
+---
+# playbooks/kubernetes/setup-cluster.yml
+- import_playbook: ../common/common.yml
+
+- import_playbook: ../common/install-docker.yml
+
+- name: Configure Kubernetes nodes
+  hosts: cluster
+  become: true
+  tasks:
+    - name: Include common tasks
+      include_role:
+        name: common
+
+- import_playbook: master.yml
+- import_playbook: worker.yml
+
+# Deploy additional components on master node
+- name: Deploy cluster components
+  hosts: master
+  become: true
+  tasks:
+    - name: Deploy MetalLB
+      import_playbook: deploy-metallb.yml
+
+    - name: Install ArgoCD
+      import_playbook: ../argocd/install-argocd.yml
