@@ -1,0 +1,29 @@
+# tools/vault/values.yaml
+server:
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  standalone:
+    enabled: true  # For homelab, using standalone instead of HA
+    config: |
+      ui = true
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "file" {
+        path = "/vault/data"
+      }
+
+  service:
+    type: LoadBalancer
+
+  dataStorage:
+    enabled: true
+    size: 10Gi

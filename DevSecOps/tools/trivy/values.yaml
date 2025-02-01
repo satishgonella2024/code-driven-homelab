@@ -1,0 +1,19 @@
+# tools/trivy/values.yaml
+trivy:
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  nodeCollector:
+    nodeSelector: {}  # Remove specific node selector
+    tolerations:
+      - operator: "Exists"  # Allow scheduling on any node
+  service:
+    type: LoadBalancer
+  operator:
+    nodeSelector: {}
+    tolerations:
+      - operator: "Exists"

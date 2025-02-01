@@ -1,0 +1,20 @@
+# tools/manifests/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devsecops
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security-tools
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd

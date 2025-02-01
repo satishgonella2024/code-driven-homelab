@@ -11,11 +11,50 @@ controller:
     - git
     - configuration-as-code
     - job-dsl
+    - sonar:2.15
+    - hashicorp-vault-plugin:359.v2da_3b_45f17d5
+    - docker-workflow:572.v950f58993843
   admin:
     username: "admin"
     password: "admin123"
-  serviceType: LoadBalancer      # This is the correct way to set service type
-  servicePort: 8080             # This is the correct way to set service port
+  serviceType: LoadBalancer
+  servicePort: 8080
+  JCasC:
+    configScripts:
+      credentials: |
+        credentials:
+          system:
+            domainCredentials:
+              - credentials:
+                  - string:
+                      scope: GLOBAL
+                      id: "sonar-token"
+                      secret: "${SONAR_TOKEN}"
+                      description: "SonarQube API Token"
+      jenkins: |
+        jenkins:
+          globalNodeProperties:
+            - envVars:
+                env:
+                  - key: "SONARQUBE_URL"
+                    value: "http://sonarqube-sonarqube.devsecops:9000"
+                  - key: "VAULT_ADDR"
+                    value: "http://vault.security-tools:8200"
+      sonar: |
+        unclassified:
+          sonarGlobalConfiguration:
+            buildWrapperEnabled: true
+            installations:
+              - name: "SonarQube"
+                serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
+                credentialsId: "sonar-token"
+      vault: |
+        unclassified:
+          vault:
+            configuration:
+              engineVersion: 2
+              vaultUrl: "http://vault.security-tools:8200"
+              skipSslVerification: true
 
 persistence:
   enabled: true
@@ -29,3 +68,13 @@ agent:
     tag: "latest"
   workingDir: "/home/jenkins/agent"
   replicas: 2
+  serviceAccount:
+    create: true
+    annotations:
+      vault.hashicorp.com/agent-inject: "true"
+      vault.hashicorp.com/agent-inject-secret-sonar: "secret/data/jenkins/sonarqube"
+      vault.hashicorp.com/role: "jenkins"
+      vault.hashicorp.com/agent-inject-template-sonar: |
+        {{- with secret "secret/data/jenkins/sonarqube" -}}
+        export SONAR_TOKEN="{{ .Data.data.token }}"
+        {{- end -}}

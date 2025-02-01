@@ -1,0 +1,42 @@
+# tools/prometheus/values.yaml
+alertmanager:
+  enabled: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+
+server:
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+
+pushgateway:
+  enabled: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
+nodeExporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
+grafana:
+  enabled: true
+  service:
+    type: LoadBalancer
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+  persistence:
+    enabled: true
+    size: 5Gi
