@@ -1,0 +1,23 @@
+monitoringPasscode: "securepasscode123"
+
+community:
+  enabled: true
+
+service:
+  type: LoadBalancer
+  port: 9000
+
+sonarqube:
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi
+  ingress:
+    enabled: false
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: longhorn
+    size: 10Gi
