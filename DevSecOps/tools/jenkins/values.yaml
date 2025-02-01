@@ -1,0 +1,31 @@
+controller:
+  image:
+    registry: "docker.io"
+    repository: "jenkins/jenkins"
+    tag: "lts"
+    pullPolicy: "Always"
+  installPlugins:
+    - kubernetes
+    - workflow-job
+    - workflow-aggregator
+    - git
+    - configuration-as-code
+    - job-dsl
+  admin:
+    username: "admin"
+    password: "admin123"
+  serviceType: LoadBalancer      # This is the correct way to set service type
+  servicePort: 8080             # This is the correct way to set service port
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: longhorn
+
+agent:
+  enabled: true
+  image:
+    repository: "jenkins/inbound-agent"
+    tag: "latest"
+  workingDir: "/home/jenkins/agent"
+  replicas: 2
