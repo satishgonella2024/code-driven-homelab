@@ -9,6 +9,20 @@ pipeline {
     }
     
     stages {
+        stage('Test Vault Integration') {
+            steps {
+                script {
+                    withVault(configuration: [timeout: 60, vaultCredentialId: 'vault-token', engineVersion: 2],
+                             vaultSecrets: [[path: 'secret/jenkins/sonarqube', secretValues: [[envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']]]]) {
+                        sh '''
+                            echo "Vault Integration Test"
+                            echo "Vault SonarQube token exists: $([ ! -z "$VAULT_SONAR_TOKEN" ] && echo 'Yes' || echo 'No')"
+                        '''
+                    }
+                }
+            }
+        }
+        
         stage('Test SonarQube Connection') {
             steps {
                 withSonarQubeEnv('SonarQube') {
@@ -35,7 +49,7 @@ pipeline {
     
     post {
         always {
-            cleanWs()
+            deleteDir()
         }
     }
 }
