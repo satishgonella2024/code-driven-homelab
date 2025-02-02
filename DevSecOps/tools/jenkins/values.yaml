@@ -32,16 +32,16 @@ controller:
           system:
             domainCredentials:
               - credentials:
-                  - vaultTokenCredential:
-                      scope: GLOBAL
-                      id: "vault-token"
-                      token: ${VAULT_TOKEN}
-                      description: "Vault Root Token"
                   - string:
                       id: "sonar-token"
                       secret: ${SONAR_TOKEN}
                       scope: GLOBAL
                       description: "SonarQube Token"
+                  - string:
+                      id: "vault-token"
+                      secret: ${VAULT_TOKEN}
+                      scope: GLOBAL
+                      description: "Vault Root Token"
       vault: |
         unclassified:
           hashicorpVault:
