@@ -1,3 +1,4 @@
+# tools/jenkins/values.yaml
 controller:
   image:
     registry: "docker.io"
@@ -11,24 +12,9 @@ controller:
     - sonar:latest
     - pipeline-utility-steps:latest
     - workflow-multibranch:latest
-    - hashicorp-vault-plugin:latest  # Ensure the Vault plugin is installed
+    - hashicorp-vault-plugin:latest
   JCasC:
     configScripts:
-      credentials: |
-        credentials:
-          system:
-            domainCredentials:
-              - credentials:
-                  - string:
-                      scope: GLOBAL
-                      id: "sonar-token"
-                      secret: ${SONAR_TOKEN}
-                      description: "SonarQube Token"
-                  - string:
-                      scope: GLOBAL
-                      id: "vault-token"
-                      secret: ${VAULT_TOKEN}
-                      description: "Vault Token"
       jenkins-auth: |
         jenkins:
           securityRealm:
@@ -37,7 +23,31 @@ controller:
               users:
                 - id: "admin"
                   password: "admin@123"
-          authorizationStrategy: loggedInUsersCanDoAnything
+          authorizationStrategy:
+            loggedInUsersCanDoAnything:
+              allowAnonymousRead: false
+      credentials: |
+        credentials:
+          system:
+            domainCredentials:
+              - credentials:
+                  - string:
+                      id: "sonar-token"
+                      secret: ${SONAR_TOKEN}
+                      scope: GLOBAL
+                      description: "SonarQube Token"
+                  - string:
+                      id: "vault-token"
+                      secret: ${VAULT_TOKEN}
+                      scope: GLOBAL
+                      description: "Vault Token"
+      vault: |
+        unclassified:
+          hashicorpVault:
+            configuration:
+              engineVersion: 2
+              vaultCredentialId: "vault-token"
+              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
       sonar: |
         unclassified:
           sonarGlobalConfiguration:
@@ -46,7 +56,7 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
-      kubernetes: |
+      clouds: |
         jenkins:
           clouds:
             - kubernetes:
@@ -69,13 +79,6 @@ controller:
                       - hostPathVolume:
                           hostPath: "/var/run/docker.sock"
                           mountPath: "/var/run/docker.sock"
-      vault: |
-        unclassified:
-          hashicorpVault:
-            configuration:
-              engineVersion: 2
-              vaultCredentialId: "vault-token"
-              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
