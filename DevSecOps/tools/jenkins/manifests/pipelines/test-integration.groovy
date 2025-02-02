@@ -6,27 +6,43 @@ pipeline {
     
     environment {
         SONAR_PROJECT_KEY = "test-project"
+        VAULT_ADDR = "http://vault.security-tools.svc.cluster.local:8200"
     }
     
     stages {
         stage('Test Vault Integration') {
             steps {
-                withVault(configuration: [timeout: 60, vaultCredentialId: 'vault-token'],
-                         vaultSecrets: [[
-                             path: 'secret/data/jenkins/sonarqube',
-                             secretValues: [[envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']]
-                         ]]) {
-                    sh '''
-                        echo "Vault Integration Test"
-                        echo "Testing Vault Connection..."
-                        if [ ! -z "$VAULT_SONAR_TOKEN" ]; then
-                            echo "Successfully retrieved secret from Vault: Secret exists"
-                            echo "Secret value matches SonarQube token: $([ "$VAULT_SONAR_TOKEN" == "$SONAR_TOKEN" ] && echo 'Yes' || echo 'No')"
-                        else
-                            echo "Failed to retrieve secret from Vault"
-                            exit 1
-                        fi
-                    '''
+                script {
+                    withCredentials([string(credentialsId: 'vault-token', variable: 'TOKEN')]) {
+                        withVault(
+                            configuration: [
+                                engineVersion: 2,
+                                timeout: 60,
+                                vaultCredentialId: 'vault-token'
+                            ],
+                            vaultSecrets: [
+                                [
+                                    path: 'secret/data/jenkins/sonarqube',
+                                    engineVersion: 2,
+                                    secretValues: [
+                                        [envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']
+                                    ]
+                                ]
+                            ]
+                        ) {
+                            sh '''
+                                echo "Vault Integration Test"
+                                echo "Testing Vault Connection..."
+                                if [ ! -z "$VAULT_SONAR_TOKEN" ]; then
+                                    echo "Successfully retrieved secret from Vault: Secret exists"
+                                    echo "Secret value matches SonarQube token: $([ "$VAULT_SONAR_TOKEN" == "$SONAR_TOKEN" ] && echo 'Yes' || echo 'No')"
+                                else
+                                    echo "Failed to retrieve secret from Vault"
+                                    exit 1
+                                fi
+                            '''
+                        }
+                    }
                 }
             }
         }
