@@ -69,6 +69,13 @@ controller:
                       - hostPathVolume:
                           hostPath: "/var/run/docker.sock"
                           mountPath: "/var/run/docker.sock"
+      vault: |
+        unclassified:
+          hashicorpVault:
+            configuration:
+              engineVersion: 2
+              vaultCredentialId: "vault-token"
+              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
