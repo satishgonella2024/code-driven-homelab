@@ -64,25 +64,6 @@ controller:
                       - hostPathVolume:
                           hostPath: "/var/run/docker.sock"
                           mountPath: "/var/run/docker.sock"
-      jobs: |
-        jobs:
-          - script: >
-              pipelineJob('test-integration') {
-                definition {
-                  cpsScm {
-                    lightweight(true)
-                    scm {
-                      git {
-                        remote {
-                          url('https://github.com/satishgonella2024/code-driven-homelab.git')
-                        }
-                        branch('*/main')
-                      }
-                    }
-                    scriptPath('tools/jenkins/manifests/pipelines/test-integration.groovy')
-                  }
-                }
-              }
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
