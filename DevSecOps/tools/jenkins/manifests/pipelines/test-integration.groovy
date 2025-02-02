@@ -1,6 +1,8 @@
 // tools/jenkins/manifests/pipelines/test-integration.groovy
 pipeline {
-    agent any
+    agent {
+        label 'jenkins-agent'
+    }
     
     environment {
         SONAR_PROJECT_KEY = "test-project"
@@ -25,6 +27,7 @@ pipeline {
                     echo "Environment Information:"
                     echo "SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY}"
                     echo "Workspace: ${WORKSPACE}"
+                    echo "Node Name: ${NODE_NAME}"
                 '''
             }
         }

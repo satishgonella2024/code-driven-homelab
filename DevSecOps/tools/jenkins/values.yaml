@@ -10,6 +10,8 @@ controller:
     - configuration-as-code:latest
     - workflow-aggregator:latest
     - sonar:latest
+    - pipeline-utility-steps:latest
+    - workflow-multibranch:latest
   JCasC:
     configScripts:
       credentials: |
@@ -39,6 +41,48 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
+      kubernetes: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                name: "kubernetes"
+                serverUrl: "https://kubernetes.default"
+                namespace: "devsecops"
+                skipTlsVerify: true
+                jenkinsUrl: "http://jenkins.devsecops:8080"
+                jenkinsTunnel: "jenkins-agent.devsecops:50000"
+                templates:
+                  - name: "jenkins-agent"
+                    label: "jenkins-agent"
+                    nodeUsageMode: NORMAL
+                    containers:
+                      - name: "jnlp"
+                        image: "jenkins/inbound-agent:latest"
+                        alwaysPullImage: true
+                    idleMinutes: 0
+                    volumes:
+                      - hostPathVolume:
+                          hostPath: "/var/run/docker.sock"
+                          mountPath: "/var/run/docker.sock"
+      jobs: |
+        jobs:
+          - script: >
+              pipelineJob('test-integration') {
+                definition {
+                  cpsScm {
+                    lightweight(true)
+                    scm {
+                      git {
+                        remote {
+                          url('https://github.com/satishgonella2024/code-driven-homelab.git')
+                        }
+                        branch('*/main')
+                      }
+                    }
+                    scriptPath('tools/jenkins/manifests/pipelines/test-integration.groovy')
+                  }
+                }
+              }
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
@@ -53,11 +97,3 @@ persistence:
   size: 10Gi
   storageClass: longhorn
   accessMode: ReadWriteOnce
-
-agent:
-  enabled: true
-  image:
-    repository: "jenkins/inbound-agent"
-    tag: "3107.v665000b_51092-5"  # Using a specific version
-  workingDir: "/home/jenkins/agent"
-  replicas: 2
