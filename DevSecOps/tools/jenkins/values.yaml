@@ -27,34 +27,29 @@ controller:
           authorizationStrategy:
             loggedInUsersCanDoAnything:
               allowAnonymousRead: false
-      vault-config: |
-        unclassified:
-          hashicorpVault:
-            configuration:
-              engineVersion: 2
-              skipSslVerification: true
-              timeout: 60
-              vaultCredentialId: "vault-token"
-              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
       credentials: |
         credentials:
           system:
             domainCredentials:
-              - domain:
-                  name: "global"
-                  description: "Global credentials"
-                credentials:
-                  - usernamePassword:
-                      scope: GLOBAL
-                      id: "vault-token"
-                      username: "token"
-                      password: ${VAULT_TOKEN}
-                      description: "Vault Token"
+              - credentials:
                   - string:
-                      scope: GLOBAL
                       id: "sonar-token"
                       secret: ${SONAR_TOKEN}
+                      scope: GLOBAL
                       description: "SonarQube Token"
+                  - string:
+                      id: "vault-token"
+                      secret: ${VAULT_TOKEN}
+                      scope: GLOBAL
+                      description: "Vault Root Token"
+      vault: |
+        unclassified:
+          hashicorpVault:
+            configuration:
+              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
+              vaultCredentialId: "vault-token"
+              engineVersion: 2
+              skipSslVerification: true
       sonar: |
         unclassified:
           sonarGlobalConfiguration:
@@ -63,29 +58,6 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
-      clouds: |
-        jenkins:
-          clouds:
-            - kubernetes:
-                name: "kubernetes"
-                serverUrl: "https://kubernetes.default"
-                namespace: "devsecops"
-                skipTlsVerify: true
-                jenkinsUrl: "http://jenkins.devsecops:8080"
-                jenkinsTunnel: "jenkins-agent.devsecops:50000"
-                templates:
-                  - name: "jenkins-agent"
-                    label: "jenkins-agent"
-                    nodeUsageMode: NORMAL
-                    containers:
-                      - name: "jnlp"
-                        image: "jenkins/inbound-agent:latest"
-                        alwaysPullImage: true
-                    idleMinutes: 0
-                    volumes:
-                      - hostPathVolume:
-                          hostPath: "/var/run/docker.sock"
-                          mountPath: "/var/run/docker.sock"
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
