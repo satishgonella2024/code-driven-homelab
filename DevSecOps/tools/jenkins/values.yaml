@@ -29,7 +29,7 @@ controller:
 
   volumeMounts:
     - name: jenkins-vault-secret
-      mountPath: "/etc/secrets"
+      mountPath: "/var/jenkins_home/vault-token"
       readOnly: true
 
   JCasC:
