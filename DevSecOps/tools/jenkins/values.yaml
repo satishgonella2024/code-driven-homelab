@@ -31,25 +31,32 @@ controller:
         credentials:
           system:
             domainCredentials:
-              - credentials:
+              - domain:
+                  name: "global"
+                  description: "Global credentials"
+                credentials:
                   - string:
                       id: "sonar-token"
                       secret: ${SONAR_TOKEN}
                       scope: GLOBAL
                       description: "SonarQube Token"
-                  - string:
+                  - usernamePassword:
                       id: "vault-token"
-                      secret: ${VAULT_TOKEN}
+                      username: "token"
+                      password: ${VAULT_TOKEN}
                       scope: GLOBAL
                       description: "Vault Root Token"
       vault: |
         unclassified:
           hashicorpVault:
             configuration:
-              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
-              vaultCredentialId: "vault-token"
               engineVersion: 2
               skipSslVerification: true
+              timeout: 60
+              vaultCredentialId: "vault-token"
+              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
+              failIfNotFound: true
+              prefixPath: "secret"
       sonar: |
         unclassified:
           sonarGlobalConfiguration:
@@ -58,6 +65,47 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
+      clouds: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                containerCap: 10
+                name: "kubernetes"
+                serverUrl: "https://kubernetes.default"
+                namespace: "devsecops"
+                skipTlsVerify: true
+                jenkinsUrl: "http://jenkins.devsecops:8080"
+                jenkinsTunnel: "jenkins-agent.devsecops:50000"
+                podLabels:
+                  - key: "jenkins"
+                    value: "slave"
+                templates:
+                  - name: "jenkins-agent"
+                    label: "jenkins-agent"
+                    nodeUsageMode: NORMAL
+                    serviceAccount: "default"
+                    containers:
+                      - name: "jnlp"
+                        image: "jenkins/inbound-agent:latest"
+                        alwaysPullImage: true
+                        command: ""
+                        args: "^${computer.jnlpmac} ^${computer.name}"
+                        ttyEnabled: false
+                        workingDir: "/home/jenkins/agent"
+                        privileged: false
+                        runAsGroup: "1000"
+                        runAsUser: "1000"
+                    volumes:
+                      - hostPathVolume:
+                          hostPath: "/var/run/docker.sock"
+                          mountPath: "/var/run/docker.sock"
+                    workspaceVolume:
+                      emptyDirWorkspaceVolume:
+                        memory: false
+                    yamlMergeStrategy: "override"
+                    showRawYaml: true
+                    idleMinutes: 0
+                    activeDeadlineSeconds: 300
   extraEnv:
     - name: SONAR_TOKEN
       valueFrom:
