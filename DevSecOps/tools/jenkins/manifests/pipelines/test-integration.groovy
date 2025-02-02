@@ -11,20 +11,19 @@ pipeline {
     stages {
         stage('Test Vault Integration') {
             steps {
-                withVault([
-                    vaultCredentialId: 'vault-token',
-                    vaultPath: 'secret/data/jenkins/sonarqube'
-                ]) {
+                withVault(configuration: [timeout: 60, vaultCredentialId: 'vault-token'],
+                         vaultSecrets: [[
+                             path: 'secret/data/jenkins/sonarqube',
+                             secretValues: [[envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']]
+                         ]]) {
                     sh '''
                         echo "Vault Integration Test"
                         echo "Testing Vault Connection..."
-                        if [ -n "$VAULT_TOKEN" ]; then
-                            echo "Successfully retrieved Vault token"
-                            # Test reading from Vault directly
-                            VAULT_ADDR="http://vault.security-tools.svc.cluster.local:8200" \
-                            vault read secret/data/jenkins/sonarqube
+                        if [ ! -z "$VAULT_SONAR_TOKEN" ]; then
+                            echo "Successfully retrieved secret from Vault: Secret exists"
+                            echo "Secret value matches SonarQube token: $([ "$VAULT_SONAR_TOKEN" == "$SONAR_TOKEN" ] && echo 'Yes' || echo 'No')"
                         else
-                            echo "Failed to retrieve Vault token"
+                            echo "Failed to retrieve secret from Vault"
                             exit 1
                         fi
                     '''
