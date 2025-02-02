@@ -1,24 +1,15 @@
+# tools/jenkins/values.yaml
 controller:
   image:
     registry: "docker.io"
     repository: "jenkins/jenkins"
     tag: "lts"
-    pullPolicy: "Always"
   installPlugins:
-    - kubernetes
-    - workflow-job
-    - workflow-aggregator
-    - git
-    - configuration-as-code
-    - job-dsl
-    - sonar:2.15
-    - hashicorp-vault-plugin:359.v2da_3b_45f17d5
-    - docker-workflow:572.v950f58993843
-  admin:
-    username: "admin"
-    password: "admin123"
-  serviceType: LoadBalancer
-  servicePort: 8080
+    - kubernetes:latest
+    - git:latest
+    - configuration-as-code:latest
+    - workflow-aggregator:latest
+    - sonar:latest
   JCasC:
     configScripts:
       credentials: |
@@ -29,17 +20,17 @@ controller:
                   - string:
                       scope: GLOBAL
                       id: "sonar-token"
-                      secret: "${SONAR_TOKEN}"
-                      description: "SonarQube API Token"
-      jenkins: |
+                      secret: ${SONAR_TOKEN}
+                      description: "SonarQube Token"
+      jenkins-auth: |
         jenkins:
-          globalNodeProperties:
-            - envVars:
-                env:
-                  - key: "SONARQUBE_URL"
-                    value: "http://sonarqube-sonarqube.devsecops:9000"
-                  - key: "VAULT_ADDR"
-                    value: "http://vault.security-tools:8200"
+          securityRealm:
+            local:
+              allowsSignup: false
+              users:
+                - id: "admin"
+                  password: "admin@123"
+          authorizationStrategy: loggedInUsersCanDoAnything
       sonar: |
         unclassified:
           sonarGlobalConfiguration:
@@ -48,33 +39,25 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
-      vault: |
-        unclassified:
-          vault:
-            configuration:
-              engineVersion: 2
-              vaultUrl: "http://vault.security-tools:8200"
-              skipSslVerification: true
+  extraEnv:
+    - name: SONAR_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: jenkins-sonar-token
+          key: token
+  serviceType: LoadBalancer
+  loadBalancerIP: "192.168.5.241"
 
 persistence:
   enabled: true
   size: 10Gi
   storageClass: longhorn
+  accessMode: ReadWriteOnce
 
 agent:
   enabled: true
   image:
     repository: "jenkins/inbound-agent"
-    tag: "latest"
+    tag: "3107.v665000b_51092-5"  # Using a specific version
   workingDir: "/home/jenkins/agent"
   replicas: 2
-  serviceAccount:
-    create: true
-    annotations:
-      vault.hashicorp.com/agent-inject: "true"
-      vault.hashicorp.com/agent-inject-secret-sonar: "secret/data/jenkins/sonarqube"
-      vault.hashicorp.com/role: "jenkins"
-      vault.hashicorp.com/agent-inject-template-sonar: |
-        {{- with secret "secret/data/jenkins/sonarqube" -}}
-        export SONAR_TOKEN="{{ .Data.data.token }}"
-        {{- end -}}
