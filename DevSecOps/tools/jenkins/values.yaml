@@ -16,21 +16,26 @@ controller:
     - credentials-binding:latest
 
   env:
-    - name: VAULT_TOKEN
+    - name: VAULT_ADDR  # Vault Address for the agent
+      value: "http://vault.security-tools.svc.cluster.local:8200"
+    - name: SONAR_HOST_URL
+      value: "http://sonarqube-sonarqube.devsecops:9000"
+
+  extraEnv:
+    - name: SONAR_TOKEN # For SonarQube plugin configuration
       valueFrom:
         secretKeyRef:
-          name: jenkins-vault-token
-          key: token
+          name: jenkins-sonar-token # Kubernetes Secret name
+          key: token # Key in the secret
 
-  volumes:
-    - name: jenkins-vault-secret
-      secret:
-        secretName: jenkins-vault-token
+  serviceType: LoadBalancer
+  loadBalancerIP: "192.168.5.241" # Replace with your desired IP
 
-  volumeMounts:
-    - name: jenkins-vault-secret
-      mountPath: "/etc/secrets"
-      readOnly: true
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: longhorn # Replace with your storage class
+    accessMode: ReadWriteOnce
 
   JCasC:
     configScripts:
@@ -41,36 +46,19 @@ controller:
               allowsSignup: false
               users:
                 - id: "admin"
-                  password: "admin@123"
+                  password: "admin@123" # CHANGE THIS IN PRODUCTION!
           authorizationStrategy:
             loggedInUsersCanDoAnything:
               allowAnonymousRead: false
-
-      credentials: |
-        credentials:
-          system:
-            domainCredentials:
-              - credentials:
-                  - string:
-                      id: "sonar-token"
-                      secret: ${SONAR_TOKEN}
-                      scope: GLOBAL
-                      description: "SonarQube Token"
-                  - string:
-                      id: "vault-token"
-                      secret: ${VAULT_TOKEN}
-                      scope: GLOBAL
-                      description: "Vault Root Token"
 
       vault: |
         unclassified:
           hashicorpVault:
             configuration:
               engineVersion: 2
-              skipSslVerification: true
+              skipSslVerification: true # Only for testing!  Use proper TLS in production.
               timeout: 60
-              vaultCredentialId: "vault-token"
-              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
+              vaultUrl: "${VAULT_ADDR}"  # Use the environment variable
 
       sonar: |
         unclassified:
@@ -78,8 +66,8 @@ controller:
             buildWrapperEnabled: true
             installations:
               - name: "SonarQube"
-                serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
-                credentialsId: "sonar-token"
+                serverUrl: "${SONAR_HOST_URL}" # Use the environment variable
+                credentialsId: "sonar-token" # This will be resolved by the plugin if SONAR_TOKEN is set as env var
 
       clouds: |
         jenkins:
@@ -89,7 +77,7 @@ controller:
                 name: "kubernetes"
                 serverUrl: "https://kubernetes.default"
                 namespace: "devsecops"
-                skipTlsVerify: true
+                skipTlsVerify: true # Only for testing! Use proper TLS in production.
                 jenkinsUrl: "http://jenkins.devsecops:8080"
                 jenkinsTunnel: "jenkins-agent.devsecops:50000"
                 templates:
@@ -101,24 +89,6 @@ controller:
                         image: "jenkins/inbound-agent:latest"
                         alwaysPullImage: true
                         workingDir: "/home/jenkins/agent"
-
-  extraEnv:
-    - name: SONAR_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jenkins-sonar-token
-          key: token
-    - name: VAULT_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jenkins-vault-token
-          key: token
-
-  serviceType: LoadBalancer
-  loadBalancerIP: "192.168.5.241"
-
-persistence:
-  enabled: true
-  size: 10Gi
-  storageClass: longhorn
-  accessMode: ReadWriteOnce
+                        env: # Pass Vault address to the agent
+                          - name: VAULT_ADDR
+                            value: "http://vault.security-tools.svc.cluster.local:8200"
