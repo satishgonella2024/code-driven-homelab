@@ -1,17 +1,10 @@
 # tools/jenkins/values.yaml
 controller:
-  image:
-    registry: "docker.io"
-    repository: "jenkins/jenkins"
-    tag: "lts"
   installPlugins:
     - kubernetes:latest
-    - git:latest
     - configuration-as-code:latest
     - workflow-aggregator:latest
-    - sonar:latest
-    - pipeline-utility-steps:latest
-    - workflow-multibranch:latest
+    - git:latest
     - hashicorp-vault-plugin:latest
     - credentials-binding:latest
   JCasC:
@@ -33,58 +26,17 @@ controller:
             domainCredentials:
               - credentials:
                   - string:
-                      id: "sonar-token"
-                      secret: ${SONAR_TOKEN}
-                      scope: GLOBAL
-                      description: "SonarQube Token"
-                  - string:
                       id: "vault-token"
                       secret: ${VAULT_TOKEN}
-                      scope: GLOBAL
-                      description: "Vault Root Token"
+                      description: "Vault Token"
       vault: |
         unclassified:
           hashicorpVault:
             configuration:
-              engineVersion: 2
-              skipSslVerification: true
-              timeout: 60
-              vaultCredentialId: "vault-token"
               vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
-      sonar: |
-        unclassified:
-          sonarGlobalConfiguration:
-            buildWrapperEnabled: true
-            installations:
-              - name: "SonarQube"
-                serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
-                credentialsId: "sonar-token"
-      clouds: |
-        jenkins:
-          clouds:
-            - kubernetes:
-                containerCap: 10
-                name: "kubernetes"
-                serverUrl: "https://kubernetes.default"
-                namespace: "devsecops"
-                skipTlsVerify: true
-                jenkinsUrl: "http://jenkins.devsecops:8080"
-                jenkinsTunnel: "jenkins-agent.devsecops:50000"
-                templates:
-                  - name: "jenkins-agent"
-                    label: "jenkins-agent"
-                    nodeUsageMode: NORMAL
-                    containers:
-                      - name: "jnlp"
-                        image: "jenkins/inbound-agent:latest"
-                        alwaysPullImage: true
-                        workingDir: "/home/jenkins/agent"
+              vaultCredentialId: "vault-token"
+              engineVersion: 2
   extraEnv:
-    - name: SONAR_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jenkins-sonar-token
-          key: token
     - name: VAULT_TOKEN
       valueFrom:
         secretKeyRef:
