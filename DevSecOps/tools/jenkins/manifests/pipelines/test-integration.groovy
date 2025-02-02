@@ -12,12 +12,20 @@ pipeline {
         stage('Test Vault Integration') {
             steps {
                 script {
-                    withVault(configuration: [timeout: 60, vaultCredentialId: 'vault-token', engineVersion: 2],
-                             vaultSecrets: [[path: 'secret/jenkins/sonarqube', secretValues: [[envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']]]]) {
-                        sh '''
-                            echo "Vault Integration Test"
-                            echo "Vault SonarQube token exists: $([ ! -z "$VAULT_SONAR_TOKEN" ] && echo 'Yes' || echo 'No')"
-                        '''
+                    withCredentials([usernamePassword(credentialsId: 'vault-token', usernameVariable: 'VAULT_USER', passwordVariable: 'TOKEN')]) {
+                        withVault(
+                            configuration: [
+                                vaultCredentialId: 'vault-token',
+                                vaultUrl: 'http://vault.security-tools.svc.cluster.local:8200',
+                                engineVersion: 2
+                            ]
+                        ) {
+                            sh '''
+                                echo "Vault Integration Test"
+                                echo "Testing Vault Connection..."
+                                VAULT_TOKEN=$TOKEN vault read secret/jenkins/sonarqube
+                            '''
+                        }
                     }
                 }
             }
