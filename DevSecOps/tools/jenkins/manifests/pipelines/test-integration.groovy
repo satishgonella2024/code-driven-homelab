@@ -1,4 +1,3 @@
-// tools/jenkins/manifests/pipelines/test-integration.groovy
 pipeline {
     agent {
         label 'jenkins-agent'
