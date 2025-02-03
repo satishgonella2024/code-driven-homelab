@@ -8,53 +8,45 @@ pipeline {
     }
     
     stages {
-        stage('Test Vault Integration') {
+        stage('Test SonarQube Connection') {
             steps {
-                script {
-                    withEnv(["VAULT_ADDR=http://vault.security-tools.svc.cluster.local:8200"]) {
-                        echo "Testing Vault connection at: ${env.VAULT_ADDR}"
-                        // Test if environment variable is available
-                        sh 'echo "Current VAULT_TOKEN: ${VAULT_TOKEN}"'
-                        
-                        withVault(
-                            configuration: [
-                                skipSslVerification: true,
-                                timeout: 60,
-                                vaultCredential: [
-                                    id: 'vault-token',
-                                    scope: 'GLOBAL'
-                                ],
-                                vaultUrl: env.VAULT_ADDR
-                            ],
-                            vaultSecrets: [
-                                [
-                                    path: 'secret/data/jenkins/sonarqube',
-                                    secretValues: [
-                                        [envVar: 'VAULT_SONAR_TOKEN', vaultKey: 'token']
-                                    ]
-                                ]
-                            ]
-                        ) {
-                            sh '''
-                                echo "Vault Integration Test"
-                                echo "Testing Vault Connection..."
-                                echo "Using Vault at: $VAULT_ADDR"
-                                
-                                if [ ! -z "$VAULT_SONAR_TOKEN" ]; then
-                                    echo "Successfully retrieved secret from Vault"
-                                    echo "Token is present and not empty"
-                                else
-                                    echo "Failed to retrieve secret from Vault"
-                                    exit 1
-                                fi
-                            '''
-                        }
-                    }
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        echo "SonarQube Integration Test"
+                        echo "SonarQube URL: ${SONAR_HOST_URL}"
+                        curl -s -f -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/system/status"
+                        if [ $? -eq 0 ]; then
+                            echo "Successfully connected to SonarQube"
+                        else
+                            echo "Failed to connect to SonarQube"
+                            exit 1
+                        fi
+                    '''
                 }
             }
         }
         
-        // ... (keep other stages)
+        stage('Example Security Scan') {
+            steps {
+                sh '''
+                    echo "Running security scan simulation..."
+                    echo "✓ Checking dependencies"
+                    echo "✓ Scanning for vulnerabilities"
+                    echo "✓ Analyzing code quality"
+                '''
+            }
+        }
+        
+        stage('Environment Info') {
+            steps {
+                sh '''
+                    echo "Environment Information:"
+                    echo "SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY}"
+                    echo "Workspace: ${WORKSPACE}"
+                    echo "Node Name: ${NODE_NAME}"
+                '''
+            }
+        }
     }
     
     post {

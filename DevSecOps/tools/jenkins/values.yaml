@@ -12,17 +12,13 @@ controller:
     - sonar:latest
     - pipeline-utility-steps:latest
     - workflow-multibranch:latest
-    - hashicorp-vault-plugin:latest
-    - credentials-binding:latest
 
   env:
-    - name: VAULT_TOKEN
+    - name: SONAR_TOKEN
       valueFrom:
         secretKeyRef:
-          name: jenkins-vault-token
+          name: jenkins-sonar-token
           key: token
-    - name: VAULT_ADDR
-      value: "http://vault.security-tools.svc.cluster.local:8200"
 
   JCasC:
     configScripts:
@@ -38,20 +34,6 @@ controller:
             loggedInUsersCanDoAnything:
               allowAnonymousRead: false
 
-      vault: |
-        unclassified:
-          hashicorpVault:
-            configuration:
-              engineVersion: 2
-              skipSslVerification: true
-              timeout: 60
-              vaultCredential:
-                id: "vault-token"
-                scope: GLOBAL
-                description: "Vault Token"
-                secret: ${VAULT_TOKEN}
-              vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
-
       sonar: |
         unclassified:
           sonarGlobalConfiguration:
@@ -65,20 +47,12 @@ controller:
         credentials:
           system:
             domainCredentials:
-              - domain:
-                  name: "global"
-                  description: "Global credentials"
-                credentials:
+              - credentials:
                   - string:
                       id: "sonar-token"
                       secret: ${SONAR_TOKEN}
                       scope: GLOBAL
                       description: "SonarQube Token"
-                  - string:
-                      id: "vault-token"
-                      secret: ${VAULT_TOKEN}
-                      scope: GLOBAL
-                      description: "Vault Token"
 
       clouds: |
         jenkins:
