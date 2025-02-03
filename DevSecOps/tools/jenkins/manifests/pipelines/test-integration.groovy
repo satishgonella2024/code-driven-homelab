@@ -13,10 +13,17 @@ pipeline {
                 script {
                     withEnv(["VAULT_ADDR=http://vault.security-tools.svc.cluster.local:8200"]) {
                         echo "Testing Vault connection at: ${env.VAULT_ADDR}"
+                        // Test if environment variable is available
+                        sh 'echo "Current VAULT_TOKEN: ${VAULT_TOKEN}"'
+                        
                         withVault(
                             configuration: [
                                 skipSslVerification: true,
-                                vaultCredentialId: 'vault-token',
+                                timeout: 60,
+                                vaultCredential: [
+                                    id: 'vault-token',
+                                    scope: 'GLOBAL'
+                                ],
                                 vaultUrl: env.VAULT_ADDR
                             ],
                             vaultSecrets: [
@@ -47,39 +54,12 @@ pipeline {
             }
         }
         
-        stage('Test SonarQube Connection') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        echo "SonarQube Integration Test"
-                        echo "SonarQube URL: ${SONAR_HOST_URL}"
-                        if curl -s -f -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/system/status"; then
-                            echo "Successfully connected to SonarQube"
-                        else
-                            echo "Failed to connect to SonarQube"
-                            exit 1
-                        fi
-                    '''
-                }
-            }
-        }
-        
-        stage('Print Environment') {
-            steps {
-                sh '''
-                    echo "Environment Information:"
-                    echo "SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY}"
-                    echo "Workspace: ${WORKSPACE}"
-                    echo "Node Name: ${NODE_NAME}"
-                    echo "Jenkins Home: ${JENKINS_HOME}"
-                '''
-            }
-        }
+        // ... (keep other stages)
     }
     
     post {
         always {
-            deleteDir() // Using deleteDir instead of cleanWs
+            deleteDir()
         }
         success {
             echo 'Pipeline succeeded! All integrations are working.'

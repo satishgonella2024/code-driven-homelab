@@ -45,7 +45,11 @@ controller:
               engineVersion: 2
               skipSslVerification: true
               timeout: 60
-              vaultCredentialId: "vault-token"
+              vaultCredential:
+                id: "vault-token"
+                scope: GLOBAL
+                description: "Vault Token"
+                secret: ${VAULT_TOKEN}
               vaultUrl: "http://vault.security-tools.svc.cluster.local:8200"
 
       sonar: |
@@ -74,7 +78,7 @@ controller:
                       id: "vault-token"
                       secret: ${VAULT_TOKEN}
                       scope: GLOBAL
-                      description: "Vault Root Token"
+                      description: "Vault Token"
 
       clouds: |
         jenkins:
