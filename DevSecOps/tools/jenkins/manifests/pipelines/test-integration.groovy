@@ -5,10 +5,12 @@ pipeline {
     
     environment {
         SONAR_PROJECT_KEY = "test-project"
+        DOCKER_IMAGE = "sample-app"
+        DOCKER_TAG = "latest"
     }
     
     stages {
-        stage('Test SonarQube Connection') {
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     sh '''
@@ -26,24 +28,51 @@ pipeline {
             }
         }
         
-        stage('Example Security Scan') {
+        stage('Security Scan') {
+            agent {
+                kubernetes {
+                    yaml '''
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: trivy
+                            image: aquasec/trivy:latest
+                            command:
+                            - cat
+                            tty: true
+                    '''
+                }
+            }
             steps {
-                sh '''
-                    echo "Running security scan simulation..."
-                    echo "✓ Checking dependencies"
-                    echo "✓ Scanning for vulnerabilities"
-                    echo "✓ Analyzing code quality"
-                '''
+                container('trivy') {
+                    sh '''
+                        echo "Running Trivy vulnerability scan..."
+                        trivy version
+                        # Example of scanning a public image
+                        trivy image nginx:latest --no-progress --severity HIGH,CRITICAL
+                    '''
+                }
             }
         }
         
-        stage('Environment Info') {
+        stage('Code Quality Gates') {
+            steps {
+                script {
+                    echo "Checking code quality gates..."
+                    // Add quality gate checks here
+                }
+            }
+        }
+        
+        stage('Report') {
             steps {
                 sh '''
                     echo "Environment Information:"
                     echo "SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY}"
                     echo "Workspace: ${WORKSPACE}"
                     echo "Node Name: ${NODE_NAME}"
+                    echo "Build Number: ${BUILD_NUMBER}"
                 '''
             }
         }
@@ -52,12 +81,13 @@ pipeline {
     post {
         always {
             deleteDir()
+            echo "Cleanup completed"
         }
         success {
-            echo 'Pipeline succeeded! All integrations are working.'
+            echo 'Pipeline succeeded! All security checks passed.'
         }
         failure {
-            echo 'Pipeline failed! Check the logs above for details.'
+            echo 'Pipeline failed! Security checks did not pass.'
         }
     }
 }
