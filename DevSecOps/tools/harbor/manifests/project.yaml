@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: create-harbor-project
+  namespace: harbor
+data:
+  create-project.sh: |
+    #!/bin/bash
+    curl -k -X POST \
+      "http://harbor-core.harbor.svc.cluster.local/api/v2.0/projects" \
+      -H "Content-Type: application/json" \
+      -u "admin:Harbor12345" \
+      -d '{
+        "project_name": "devsecops",
+        "public": true,
+        "metadata": {
+          "auto_scan": "true",
+          "enable_content_trust": "false",
+          "prevent_vul": "false",
+          "severity": "high"
+        }
+      }'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-harbor-project
+  namespace: harbor
+spec:
+  template:
+    spec:
+      containers:
+      - name: create-project
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "/scripts/create-project.sh"]
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+      volumes:
+      - name: script
+        configMap:
+          name: create-harbor-project
+          defaultMode: 0777
+      restartPolicy: Never
+  backoffLimit: 4
