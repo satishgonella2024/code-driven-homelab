@@ -21,16 +21,8 @@ controller:
         secretKeyRef:
           name: jenkins-vault-token
           key: token
-
-  volumes:
-    - name: jenkins-vault-secret
-      secret:
-        secretName: jenkins-vault-token
-
-  volumeMounts:
-    - name: jenkins-vault-secret
-      mountPath: "/var/jenkins_home/vault-token"
-      readOnly: true
+    - name: VAULT_ADDR
+      value: "http://vault.security-tools.svc.cluster.local:8200"
 
   JCasC:
     configScripts:
@@ -45,22 +37,6 @@ controller:
           authorizationStrategy:
             loggedInUsersCanDoAnything:
               allowAnonymousRead: false
-
-      credentials: |
-        credentials:
-          system:
-            domainCredentials:
-              - credentials:
-                  - string:
-                      id: "sonar-token"
-                      secret: ${SONAR_TOKEN}
-                      scope: GLOBAL
-                      description: "SonarQube Token"
-                  - string:
-                      id: "vault-token"
-                      secret: ${VAULT_TOKEN}
-                      scope: GLOBAL
-                      description: "Vault Root Token"
 
       vault: |
         unclassified:
@@ -80,6 +56,25 @@ controller:
               - name: "SonarQube"
                 serverUrl: "http://sonarqube-sonarqube.devsecops:9000"
                 credentialsId: "sonar-token"
+
+      credentials: |
+        credentials:
+          system:
+            domainCredentials:
+              - domain:
+                  name: "global"
+                  description: "Global credentials"
+                credentials:
+                  - string:
+                      id: "sonar-token"
+                      secret: ${SONAR_TOKEN}
+                      scope: GLOBAL
+                      description: "SonarQube Token"
+                  - string:
+                      id: "vault-token"
+                      secret: ${VAULT_TOKEN}
+                      scope: GLOBAL
+                      description: "Vault Root Token"
 
       clouds: |
         jenkins:
@@ -101,18 +96,6 @@ controller:
                         image: "jenkins/inbound-agent:latest"
                         alwaysPullImage: true
                         workingDir: "/home/jenkins/agent"
-
-  extraEnv:
-    - name: SONAR_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jenkins-sonar-token
-          key: token
-    - name: VAULT_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: jenkins-vault-token
-          key: token
 
   serviceType: LoadBalancer
   loadBalancerIP: "192.168.5.241"
