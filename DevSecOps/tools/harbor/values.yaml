@@ -1,0 +1,61 @@
+expose:
+  type: loadBalancer
+  loadBalancer:
+    IP: "192.168.5.243"  # Assign a static IP from your range
+  tls:
+    enabled: false
+
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      storageClass: "longhorn"
+      size: 50Gi
+    chartmuseum:
+      storageClass: "longhorn"
+      size: 5Gi
+    jobservice:
+      storageClass: "longhorn"
+      size: 1Gi
+    database:
+      storageClass: "longhorn"
+      size: 1Gi
+    redis:
+      storageClass: "longhorn"
+      size: 1Gi
+    trivy:
+      storageClass: "longhorn"
+      size: 5Gi
+
+harborAdminPassword: "Harbor12345"
+
+database:
+  internal:
+    password: "Harbor12345"
+
+trivy:
+  enabled: true
+  gitHubToken: ""
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+notary:
+  enabled: false
+
+chartmuseum:
+  enabled: false
+
+log:
+  level: info
+  localFile:
+    maxSize: 100M
+    maxBackups: 10
+
+portal:
+  replicas: 1

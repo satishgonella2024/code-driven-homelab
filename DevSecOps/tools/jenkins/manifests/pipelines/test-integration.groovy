@@ -5,8 +5,9 @@ pipeline {
     
     environment {
         SONAR_PROJECT_KEY = "test-project"
-        DOCKER_IMAGE = "sample-app"
-        DOCKER_TAG = "latest"
+        HARBOR_URL = "192.168.5.242"  // Use the LoadBalancer IP
+        IMAGE_NAME = "devsecops/sample-app"
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
     
     stages {
@@ -24,6 +25,42 @@ pipeline {
                             exit 1
                         fi
                     '''
+                }
+            }
+        }
+        
+        stage('Build & Push Image') {
+            agent {
+                kubernetes {
+                    yaml '''
+                        apiVersion: v1
+                        kind: Pod
+                        spec:
+                          containers:
+                          - name: kaniko
+                            image: gcr.io/kaniko-project/executor:latest
+                            command:
+                            - /busybox/cat
+                            tty: true
+                            volumeMounts:
+                            - name: docker-config
+                              mountPath: /kaniko/.docker
+                          volumes:
+                          - name: docker-config
+                            configMap:
+                              name: docker-config
+                    '''
+                }
+            }
+            steps {
+                container('kaniko') {
+                    sh """
+                        /kaniko/executor \
+                        --context=. \
+                        --destination=${HARBOR_URL}/${IMAGE_NAME}:${IMAGE_TAG} \
+                        --destination=${HARBOR_URL}/${IMAGE_NAME}:latest \
+                        --insecure
+                    """
                 }
             }
         }
@@ -48,19 +85,8 @@ pipeline {
                 container('trivy') {
                     sh '''
                         echo "Running Trivy vulnerability scan..."
-                        trivy version
-                        # Example of scanning a public image
-                        trivy image nginx:latest --no-progress --severity HIGH,CRITICAL
+                        trivy image --no-progress --severity HIGH,CRITICAL ${HARBOR_URL}/${IMAGE_NAME}:${IMAGE_TAG}
                     '''
-                }
-            }
-        }
-        
-        stage('Code Quality Gates') {
-            steps {
-                script {
-                    echo "Checking code quality gates..."
-                    // Add quality gate checks here
                 }
             }
         }
@@ -68,10 +94,10 @@ pipeline {
         stage('Report') {
             steps {
                 sh '''
-                    echo "Environment Information:"
-                    echo "SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY}"
-                    echo "Workspace: ${WORKSPACE}"
-                    echo "Node Name: ${NODE_NAME}"
+                    echo "Build Summary:"
+                    echo "========================="
+                    echo "Image: ${HARBOR_URL}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "SonarQube Project: ${SONAR_PROJECT_KEY}"
                     echo "Build Number: ${BUILD_NUMBER}"
                 '''
             }
@@ -82,12 +108,6 @@ pipeline {
         always {
             deleteDir()
             echo "Cleanup completed"
-        }
-        success {
-            echo 'Pipeline succeeded! All security checks passed.'
-        }
-        failure {
-            echo 'Pipeline failed! Security checks did not pass.'
         }
     }
 }

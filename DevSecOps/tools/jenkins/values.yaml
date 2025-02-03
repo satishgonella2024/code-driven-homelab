@@ -53,6 +53,12 @@ controller:
                       secret: ${SONAR_TOKEN}
                       scope: GLOBAL
                       description: "SonarQube Token"
+                  - usernamePassword:
+                      id: "harbor-credentials"
+                      username: "admin"
+                      password: "Harbor12345"
+                      scope: GLOBAL
+                      description: "Harbor Registry Credentials"
 
       clouds: |
         jenkins:
