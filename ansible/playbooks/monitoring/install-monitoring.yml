@@ -1,0 +1,144 @@
+---
+- name: Install Prometheus and Grafana
+  hosts: monitoring_servers
+  become: yes
+  tasks:
+
+    - name: Update apt repository and install dependencies
+      apt:
+        update_cache: yes
+        name:
+          - wget
+          - curl
+          - tar
+          - ufw
+          - libfontconfig1
+          - software-properties-common
+        state: present
+
+    - name: Create Prometheus user
+      user:
+        name: prometheus
+        system: yes
+        create_home: no
+        shell: /sbin/nologin
+
+    - name: Create Prometheus directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: '0755'
+      loop:
+        - /opt/prometheus
+        - /opt/prometheus_data
+
+    - name: Download Prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v2.49.1/prometheus-2.49.1.linux-amd64.tar.gz"
+        dest: "/tmp/prometheus.tar.gz"
+        mode: '0644'
+
+    - name: Extract Prometheus
+      unarchive:
+        src: "/tmp/prometheus.tar.gz"
+        dest: "/opt/prometheus"
+        remote_src: yes
+        extra_opts: [--strip-components=1]
+      notify: Restart Prometheus
+
+    - name: Move Prometheus binaries
+      command:
+        cmd: mv /opt/prometheus/prometheus /opt/prometheus/promtool /usr/local/bin/
+      args:
+        creates: /usr/local/bin/prometheus
+
+    - name: Create Prometheus service file
+      copy:
+        dest: "/etc/systemd/system/prometheus.service"
+        content: |
+          [Unit]
+          Description=Prometheus Monitoring System
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=prometheus
+          Group=prometheus
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus --config.file=/opt/prometheus/prometheus.yml --storage.tsdb.path=/opt/prometheus_data --web.enable-lifecycle
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart Prometheus
+
+    - name: Enable and start Prometheus service
+      systemd:
+        name: prometheus
+        enabled: yes
+        state: started
+
+    - name: Configure Prometheus YAML file
+      copy:
+        dest: "/opt/prometheus/prometheus.yml"
+        owner: prometheus
+        group: prometheus
+        mode: '0644'
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: "prometheus"
+              static_configs:
+                - targets: ["localhost:9090"]
+
+            - job_name: "node_exporter"
+              static_configs:
+                - targets: ["192.168.5.99:9100"]
+      notify: Restart Prometheus
+
+    - name: Download Grafana
+      get_url:
+        url: "https://dl.grafana.com/enterprise/release/grafana-enterprise_10.0.3_amd64.deb"
+        dest: "/tmp/grafana-enterprise.deb"
+        mode: '0644'
+
+    - name: Install Grafana
+      apt:
+        deb: "/tmp/grafana-enterprise.deb"
+      notify: Restart Grafana
+
+    - name: Enable and start Grafana service
+      systemd:
+        name: grafana-server
+        enabled: yes
+        state: started
+
+    - name: Allow Prometheus port (9090) in UFW
+      command: ufw allow 9090/tcp
+      ignore_errors: yes
+
+    - name: Allow Grafana port (3000) in UFW
+      command: ufw allow 3000/tcp
+      ignore_errors: yes
+
+    - name: Enable UFW if not already enabled
+      command: ufw enable
+      ignore_errors: yes
+
+  handlers:
+    - name: Restart Prometheus
+      systemd:
+        name: prometheus
+        state: restarted
+        enabled: yes
+
+    - name: Restart Grafana
+      systemd:
+        name: grafana-server
+        state: restarted
+        enabled: yes

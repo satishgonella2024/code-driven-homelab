@@ -74,6 +74,7 @@ controller:
                         image: "jenkins/inbound-agent:latest"
                         alwaysPullImage: true
                         workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "500m"                      
 
   serviceType: LoadBalancer
   loadBalancerIP: "192.168.5.241"
